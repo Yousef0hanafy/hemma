@@ -1,0 +1,176 @@
+// =====================================================================
+// Qudurat LMS — Prisma Schema
+// Schema is portable: change `provider` from "sqlite" to "postgres"
+// and set DATABASE_URL to a Neon connection string to migrate.
+// =====================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------
+// CONTENT MODELS — source files, categories, questions, passages
+// ---------------------------------------------------------------------
+
+/// A single imported JSON file (e.g. question_set_1.json)
+model Source {
+  id            String     @id @default(cuid())
+  slug          String     @unique
+  title         String
+  date          String?
+  importedAt    DateTime   @default(now())
+  questionCount Int        @default(0)
+  metadata      String     @default("{}")
+  questions     Question[]
+  passages      Passage[]
+
+  @@map("sources")
+}
+
+/// Master list of categories — auto-discovered from JSON `type` field
+model Category {
+  id            String     @id @default(cuid())
+  slug          String     @unique
+  nameAr        String     @unique
+  descriptionAr String?
+  icon          String?
+  colorTheme    String?
+  displayOrder  Int        @default(99)
+  questions     Question[]
+
+  @@map("categories")
+}
+
+/// Optional reading passage for استيعاب المقروء questions
+model Passage {
+  id         String     @id @default(cuid())
+  sourceId   String
+  source     Source     @relation(fields: [sourceId], references: [id])
+  titleAr    String?
+  bodyAr     String
+  metadata   String     @default("{}")
+  questions  Question[]
+
+  @@map("passages")
+}
+
+/// Unified question model — identical schema across all sources
+model Question {
+  id            String     @id @default(cuid())
+  sourceId      String
+  source        Source     @relation(fields: [sourceId], references: [id])
+  categoryId    String
+  category      Category   @relation(fields: [categoryId], references: [id])
+  passageId     String?
+  passage       Passage?   @relation(fields: [passageId], references: [id])
+  sourceLocalId Int
+  type          String
+  stem          String
+  options       String     @default("{}")
+  correctKey    String
+  explanation   String?
+  studyTip      String?
+  difficulty    String     @default("medium")
+  tags          String     @default("[]")
+  citation      String?
+  metadata      String     @default("{}")
+  createdAt     DateTime   @default(now())
+  attempts      Attempt[]
+  favorites     Favorite[]
+
+  @@unique([sourceId, sourceLocalId])
+  @@index([categoryId])
+  @@index([sourceId])
+  @@index([passageId])
+
+  @@map("questions")
+}
+
+// ---------------------------------------------------------------------
+// USER-SCOPED MODELS — attempts, favorites, daily activity, profile
+// (Currently keyed by `userBucket`; ready for NextAuth drop-in)
+// ---------------------------------------------------------------------
+
+model Attempt {
+  id          String   @id @default(cuid())
+  userBucket  String   @default("default")
+  questionId  String
+  question    Question @relation(fields: [questionId], references: [id])
+  selectedKey String?
+  isCorrect   Boolean
+  mode        String
+  sessionId   String?
+  timeMs      Int      @default(0)
+  confidence  Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  @@index([userBucket, questionId])
+  @@index([sessionId])
+  @@index([createdAt])
+  @@index([userBucket, createdAt])
+
+  @@map("attempts")
+}
+
+model Favorite {
+  id          String   @id @default(cuid())
+  userBucket  String   @default("default")
+  questionId  String
+  question    Question @relation(fields: [questionId], references: [id])
+  note        String?
+  createdAt   DateTime @default(now())
+
+  @@unique([userBucket, questionId])
+
+  @@map("favorites")
+}
+
+model DailyActivity {
+  id           String   @id @default(cuid())
+  userBucket   String   @default("default")
+  date         String
+  attempts     Int      @default(0)
+  correct      Int      @default(0)
+  xpEarned     Int      @default(0)
+  categoryStats String  @default("{}")
+
+  @@unique([userBucket, date])
+  @@index([userBucket])
+
+  @@map("daily_activities")
+}
+
+model UserProfile {
+  id                   String   @id @default(cuid())
+  userBucket           String   @unique @default("default")
+  totalXp              Int      @default(0)
+  level                Int      @default(1)
+  currentStreak        Int      @default(0)
+  longestStreak        Int      @default(0)
+  lastActiveDate       String?
+  streakShields        Int      @default(1)
+  settings             String   @default("{}")
+  unlockedAchievements String   @default("[]")
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@map("user_profiles")
+}
+
+model Achievement {
+  id            String   @id @default(cuid())
+  slug          String   @unique
+  nameAr        String
+  descriptionAr String
+  iconAr        String
+  xpReward      Int      @default(0)
+  threshold     Int      @default(0)
+  category      String
+
+  @@map("achievements")
+}
