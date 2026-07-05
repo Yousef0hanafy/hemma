@@ -30,25 +30,44 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
-.env*
+# env files — NEVER commit secrets. Use .env.example as a template.
+.env
+.env.*
+!.env.example
+
+# local SQLite database (we use Neon Postgres in production)
+/db/*.db
+/db/*.db-journal
 
 # vercel
 .vercel
 
-
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# local-only files
 local-*
 .claude
 .z-ai-config
-*.log
+.zscripts
 dev.log
 dev.out.log
+server.log
 test
 prompt
 
-server.log
-# Skills directory
+# Skills directory (internal tooling)
 /skills/
+
+# Upload directory (source JSON files — operator-managed, not committed)
+/upload/
+
+# Download directory (screenshots, generated docs — not part of source)
+/download/
+
+# Examples (reference code, not part of the app)
+/examples/
+
+# Mini-services (separate projects)
+/mini-services/
