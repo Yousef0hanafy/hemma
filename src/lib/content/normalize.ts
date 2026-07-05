@@ -81,20 +81,38 @@ const CANONICAL_LETTERS: Record<string, ArabicLetter> = {
 
 /**
  * Strip PDF-extraction noise from text.
- * Examples removed: trailing " ١٠٠٪", " 100%", extra spaces.
+ *
+ * IMPORTANT: The JSON is the source of truth. This function must ONLY remove
+ * genuine PDF-extraction artifacts and must NOT alter the semantic or visual
+ * structure of the Arabic text. Specifically:
+ *
+ * - Strip trailing " ١٠٠٪" / " 100%" suffixes (PDF confidence markers that
+ *   are NOT part of the question content).
+ * - Collapse runs of 2+ spaces/tabs into a single space (PDF extraction often
+ *   introduces spurious whitespace).
+ * - Trim leading/trailing whitespace.
+ *
+ * The following transformations are FORBIDDEN because they corrupt the text:
+ * - Removing space before ":" — in verbal analogy questions, " : " (space-
+ *   colon-space) is the STANDARD Arabic separator between word pairs.
+ *   Stripping the leading space turns "مكافأة : تفوق" into "مكافأة: تفوق",
+ *   which breaks the visual structure.
+ * - Converting "........" (multiple dots) to "…" (ellipsis) — in sentence
+ *   completion questions, runs of dots represent blank spaces to fill in.
+ *   Collapsing them to a single ellipsis character changes the visual layout.
+ * - Rewrapping hyphens — " - " spacing should be preserved as-is.
  */
 export function cleanText(input: string): string {
   if (!input) return "";
   return input
     // Strip trailing percentage noise like " ١٠٠٪" or " 100%"
+    // (PDF extraction artifact — confidence marker, not question content)
     .replace(/\s*[١٢٣٤٥٦٧٨٩٠0-9]+٪?\s*$/u, "")
     .replace(/\s+100%\s*$/u, "")
-    // Normalize multiple spaces
-    .replace(/\s{2,}/g, " ")
-    // Normalize Arabic punctuation
-    .replace(/\.{2,}/g, "…")
-    .replace(/\s*-\s*/g, " - ")
-    .replace(/\s+([،.؟!؛:])/g, "$1")
+    // Collapse runs of whitespace (spaces/tabs) into a single space.
+    // Do NOT touch newlines — questions are single-line so this is safe.
+    .replace(/[ \t]{2,}/g, " ")
+    // Trim leading/trailing whitespace
     .trim();
 }
 
