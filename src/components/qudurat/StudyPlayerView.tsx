@@ -28,6 +28,7 @@ import { categoryMeta, toArabicDigits, DIFFICULTY_META } from "@/lib/content/ui-
 import { cn } from "@/lib/utils";
 import { ArabicLetter } from "@/lib/content/dto";
 import { QuestionDTO } from "@/lib/content/dto";
+import { FullScreenLoader } from "./LoadingStates";
 
 export function StudyPlayerView({
   questionIds,
@@ -40,11 +41,7 @@ export function StudyPlayerView({
   const [currentIndex, setCurrentIndex] = useState(0);
 
   if (!questions || questions.length === 0) {
-    return (
-      <div className="text-center py-20">
-        <p className="text-muted-foreground">جاري التحميل…</p>
-      </div>
-    );
+    return <FullScreenLoader label="جارٍ تحضير الأسئلة…" />;
   }
 
   const current = questions[currentIndex];

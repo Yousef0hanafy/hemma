@@ -27,18 +27,25 @@ export function AppHeader() {
         <button
           onClick={() => setView({ kind: "dashboard" })}
           className="flex items-center gap-2.5 group"
-          aria-label="الصفحة الرئيسية"
+          aria-label="الصفحة الرئيسية — منصة همّة التعليمية"
         >
-          <div className="relative h-10 w-10 rounded-xl bg-primary text-primary-foreground grid place-items-center shadow-sm">
-            <span className="font-display text-2xl leading-none mt-0.5">ق</span>
-            <span className="absolute -bottom-1 -left-1 h-3 w-3 rounded-full bg-accent border-2 border-background" />
+          <div className="relative h-10 w-10 sm:h-11 sm:w-11 rounded-xl bg-white dark:bg-white/10 grid place-items-center shadow-sm ring-1 ring-border/50 overflow-hidden transition-transform group-hover:scale-105 group-active:scale-95">
+            <img
+              src="/logo-splash.png"
+              alt=""
+              aria-hidden="true"
+              width={36}
+              height={36}
+              className="h-7 w-7 sm:h-8 sm:w-8 object-contain"
+              draggable={false}
+            />
           </div>
           <div className="text-right">
-            <div className="font-display text-xl font-bold leading-tight text-foreground">
-              قُدرات
+            <div className="font-display text-base sm:text-lg font-bold leading-tight text-foreground">
+              منصة همّة التعليمية
             </div>
-            <div className="text-[10px] text-muted-foreground leading-tight">
-              منصّة التحضير المتميّزة
+            <div className="text-[10px] text-muted-foreground leading-tight hidden sm:block">
+              التحضير المتميّز لاختبار القدرات
             </div>
           </div>
         </button>

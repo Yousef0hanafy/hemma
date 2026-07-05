@@ -30,6 +30,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { FullScreenLoader } from "./LoadingStates";
 
 export function ExamRunnerView({
   sessionId,
@@ -129,11 +130,7 @@ export function ExamRunnerView({
   );
 
   if (!questions || questions.length === 0) {
-    return (
-      <div className="text-center py-20">
-        <p className="text-muted-foreground">جاري التحميل…</p>
-      </div>
-    );
+    return <FullScreenLoader label="جارٍ تحضير الاختبار…" />;
   }
   if (!current) return null;
 

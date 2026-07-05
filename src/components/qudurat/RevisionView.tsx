@@ -22,6 +22,7 @@ import {
   Heart,
   Zap,
 } from "lucide-react";
+import { FullScreenLoader } from "./LoadingStates";
 
 type Tab = "mistakes" | "favorites" | "flashcards";
 
@@ -115,7 +116,7 @@ function MistakesList() {
   const { data: categories } = useCategories();
 
   if (loading) {
-    return <div className="text-center py-12 text-muted-foreground">جاري التحميل…</div>;
+    return <FullScreenLoader label="جارٍ تحميل الأخطاء…" />;
   }
 
   if (!questions || questions.length === 0) {
@@ -207,7 +208,7 @@ function FavoritesList() {
   const { data: categories } = useCategories();
 
   if (loading) {
-    return <div className="text-center py-12 text-muted-foreground">جاري التحميل…</div>;
+    return <FullScreenLoader label="جارٍ تحميل المفضلة…" />;
   }
 
   if (!questions || questions.length === 0) {
@@ -274,7 +275,7 @@ function FlashcardPlayer() {
   };
 
   if (!allQuestions || allQuestions.length === 0) {
-    return <div className="text-center py-12 text-muted-foreground">جاري التحميل…</div>;
+    return <FullScreenLoader label="جارٍ تحضير البطاقات…" />;
   }
 
   return (

@@ -18,6 +18,7 @@ import {
   Home,
   Lightbulb,
 } from "lucide-react";
+import { FullScreenLoader } from "./LoadingStates";
 
 export function ExamReportView({
   questionIds,
@@ -63,7 +64,7 @@ export function ExamReportView({
   }, [questions, selections]);
 
   if (!questions || !stats) {
-    return <div className="text-center py-20">جاري التحميل…</div>;
+    return <FullScreenLoader label="جارٍ احتساب النتيجة…" />;
   }
 
   const getScoreColor = (pct: number) =>

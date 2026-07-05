@@ -93,13 +93,35 @@ export function AppShell() {
 function AppFooter() {
   return (
     <footer className="mt-auto border-t border-border/60 bg-muted/30">
-      <div className="mx-auto max-w-6xl px-4 py-4 text-center text-xs text-muted-foreground">
-        <p>
-          منصة قُدرات التعليمية — نظام تحضير اختبار القدرات اللفظية
-        </p>
-        <p className="mt-1 opacity-75">
-          مبنيّة بأحدث تقنيات الويب ل تجربة تعليمية متميّزة
-        </p>
+      <div className="mx-auto max-w-6xl px-4 py-5 flex flex-col items-center gap-2 text-center">
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <img
+            src="/logo-splash.png"
+            alt=""
+            aria-hidden="true"
+            width={20}
+            height={20}
+            className="h-5 w-5 object-contain opacity-80"
+            draggable={false}
+          />
+          <span className="font-semibold">منصة همّة التعليمية</span>
+          <span className="opacity-50">·</span>
+          <span>التحضير المتميّز لاختبار القدرات اللفظية</span>
+        </div>
+        <div className="text-[11px] text-muted-foreground/80 flex items-center gap-1.5">
+          <span>Developed By</span>
+          <a
+            href="https://portfolio-yousef-hanafy.vercel.app/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-semibold text-foreground/80 hover:text-primary underline-offset-2 hover:underline transition-colors"
+            aria-label="Youssef Hanafy — يفتح في تبويب جديد"
+          >
+            Youssef Hanafy
+          </a>
+          <span className="opacity-50">·</span>
+          <span>© {new Date().getFullYear()}</span>
+        </div>
       </div>
     </footer>
   );
