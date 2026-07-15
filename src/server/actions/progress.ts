@@ -264,17 +264,21 @@ export async function recordAttempt(input: RecordAttemptInput): Promise<RecordAt
   `;
   const maxExamScore = Math.max(0, ...examSessionScores.map((s) => s.scorePercent));
 
-  for (const a of allAchievements) {
+for (const a of allAchievements) {
     if (alreadyUnlocked.has(a.slug)) continue;
     let unlockedNow = false;
+
+    // بداية الـ switch الصحيحة
     switch (a.category) {
       case "volume":
         if (a.slug === "first_correct") unlockedNow = totalCorrect >= a.threshold;
         else if (a.slug.includes("questions")) unlockedNow = totalAttempts >= a.threshold;
         break;
+
       case "streak":
         unlockedNow = longestStreak >= a.threshold;
         break;
+
       case "mastery":
         if (a.slug === "master_category") unlockedNow = maxMastery >= a.threshold;
         else if (a.slug === "all_rounder") {
@@ -292,8 +296,8 @@ export async function recordAttempt(input: RecordAttemptInput): Promise<RecordAt
           unlockedNow = maxExamScore >= a.threshold;
         }
         break;
-    }
-      case "speed":
+
+      case "speed": // تم دمجها الآن بشكل سليم داخل الـ switch
         if (a.slug === "speed_3s" || a.slug === "lightning") {
           // Check if current attempt was answered fast enough
           // Guard against timeMs = 0 (unset) by requiring > 0
@@ -314,10 +318,12 @@ export async function recordAttempt(input: RecordAttemptInput): Promise<RecordAt
           }
         }
         break;
+
       case "revision":
         unlockedNow = totalReviews >= a.threshold;
         break;
-    }
+    } // نهاية الـ switch الصحيحة والوحيدة
+
     if (unlockedNow) {
       const xpReward = a.xpReward;
       const newAch = [...alreadyUnlocked, a.slug];

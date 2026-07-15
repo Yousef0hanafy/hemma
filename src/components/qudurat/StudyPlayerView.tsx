@@ -448,6 +448,20 @@ function StudyPlayerInner({
                   studyTip={current.studyTip}
                   confidence={confidence}
                   setConfidence={setConfidence}
+                  onAskAI={
+                    selectedKey && selectedKey !== current.correctKey
+                      ? () =>
+                          setView({
+                            kind: "study_buddy",
+                            initialQuestion: `لقد أخطأت في هذا السؤال. اخترت "${selectedKey}" ولكن الإجابة الصحيحة هي "${current.correctKey}".
+
+السؤال: ${current.stem.substring(0, 300)}
+
+اشرح لي لماذا إجابتي خاطئة وكيف يمكنني التوصّل للإجابة الصحيحة.`,
+                            context: current.id,
+                          })
+                      : undefined
+                  }
                 />
               </motion.div>
             )}

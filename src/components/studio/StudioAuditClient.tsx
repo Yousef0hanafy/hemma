@@ -56,7 +56,7 @@ import {
   Timer,
   AlertCircle,
 } from "lucide-react";
-
+import { Fragment } from "react";
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -821,79 +821,82 @@ export function StudioAuditClient() {
                     entry.result || entry.error || entry.durationMs !== null;
 
                   return (
-                    <TableRow
-                      key={entry.id}
-                      className={cn(
-                        "group cursor-pointer transition-colors",
-                        isExpanded && "bg-muted/40",
-                        entry.status === "failed" && "border-r-2 border-r-rose-300"
+                    <Fragment key={entry.id}>
+                      {/* 1. الصف الرئيسي للجدول */}
+                      <TableRow
+                        className={cn(
+                          "group cursor-pointer transition-colors",
+                          isExpanded && "bg-muted/40",
+                          entry.status === "failed" && "border-r-2 border-r-rose-300"
+                        )}
+                        onClick={() => handleToggleExpand(entry.id)}
+                      >
+                        <TableCell className="py-2.5">
+                          <OperationBadge operation={entry.operation} />
+                        </TableCell>
+                        <TableCell className="py-2.5">
+                          <StatusBadge status={entry.status} />
+                        </TableCell>
+                        <TableCell className="py-2.5 text-xs text-muted-foreground max-w-[160px] truncate">
+                          {entry.sourceTitle ?? (
+                            <span className="text-muted-foreground/50">—</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="py-2.5 text-xs max-w-[200px]">
+                          {entry.resultSummary ? (
+                            <span className="text-muted-foreground truncate block">
+                              {entry.resultSummary}
+                            </span>
+                          ) : entry.error ? (
+                            <span className="text-rose-500 truncate block">
+                              {entry.error.length > 60
+                                ? entry.error.slice(0, 60) + "..."
+                                : entry.error}
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground/50">—</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="py-2.5 text-xs tabular-nums text-muted-foreground text-left">
+                          {entry.durationLabel}
+                        </TableCell>
+                        <TableCell className="py-2.5 text-xs text-muted-foreground text-left whitespace-nowrap">
+                          {relativeTimeAr(entry.createdAt)}
+                        </TableCell>
+                        <TableCell className="py-2.5">
+                          {hasDetails && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleToggleExpand(entry.id);
+                              }}
+                            >
+                              {isExpanded ? (
+                                <ChevronUp className="h-3.5 w-3.5" />
+                              ) : (
+                                <ChevronDown className="h-3.5 w-3.5" />
+                              )}
+                            </Button>
+                          )}
+                        </TableCell>
+                      </TableRow>
+
+                      {/* 2. صف التفاصيل الموسع يظهر مباشرة أسفل الصف الرئيسي */}
+                      {isExpanded && hasDetails && (
+                        <TableRow className="bg-muted/50">
+                          <TableCell colSpan={100} className="p-4">
+                            <ExpandedRowDetail entry={entry} />
+                          </TableCell>
+                        </TableRow>
                       )}
-                      onClick={() => handleToggleExpand(entry.id)}
-                    >
-                      <TableCell className="py-2.5">
-                        <OperationBadge operation={entry.operation} />
-                      </TableCell>
-                      <TableCell className="py-2.5">
-                        <StatusBadge status={entry.status} />
-                      </TableCell>
-                      <TableCell className="py-2.5 text-xs text-muted-foreground max-w-[160px] truncate">
-                        {entry.sourceTitle ?? (
-                          <span className="text-muted-foreground/50">—</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="py-2.5 text-xs max-w-[200px]">
-                        {entry.resultSummary ? (
-                          <span className="text-muted-foreground truncate block">
-                            {entry.resultSummary}
-                          </span>
-                        ) : entry.error ? (
-                          <span className="text-rose-500 truncate block">
-                            {entry.error.length > 60
-                              ? entry.error.slice(0, 60) + "..."
-                              : entry.error}
-                          </span>
-                        ) : (
-                          <span className="text-muted-foreground/50">—</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="py-2.5 text-xs tabular-nums text-muted-foreground text-left">
-                        {entry.durationLabel}
-                      </TableCell>
-                      <TableCell className="py-2.5 text-xs text-muted-foreground text-left whitespace-nowrap">
-                        {relativeTimeAr(entry.createdAt)}
-                      </TableCell>
-                      <TableCell className="py-2.5">
-                        {hasDetails && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleToggleExpand(entry.id);
-                            }}
-                          >
-                            {isExpanded ? (
-                              <ChevronUp className="h-3.5 w-3.5" />
-                            ) : (
-                              <ChevronDown className="h-3.5 w-3.5" />
-                            )}
-                          </Button>
-                        )}
-                      </TableCell>
-                    </TableRow>
+                    </Fragment>
                   );
                 })}
               </TableBody>
             </Table>
-            {expandedId && (() => {
-              const entry = entries.find((e) => e.id === expandedId);
-              if (!entry) return null;
-              const hasDetails =
-                entry.result || entry.error || entry.durationMs !== null;
-              if (!hasDetails) return null;
-              return <ExpandedRowDetail entry={entry} />;
-            })()}
           )}
         </CardContent>
       </Card>

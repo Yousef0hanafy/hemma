@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, X, Lightbulb, Star } from "lucide-react";
+import { Bot, Check, X, Lightbulb, Star } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ArabicLetter } from "@/lib/content/dto";
 
@@ -11,12 +11,14 @@ export interface FeedbackPanelProps {
   studyTip: string | null;
   confidence: number;
   setConfidence: (n: number) => void;
+  /** Called when the user clicks "اسأل المساعد الذكي" after a wrong answer */
+  onAskAI?: () => void;
 }
 
 /**
  * Post-submission feedback for study mode.
- * Shows verdict (correct/wrong), explanation, study tip, and a
- * confidence-rating widget for metacognitive tracking.
+ * Shows verdict (correct/wrong), explanation, study tip, a
+ * confidence-rating widget, and an AI help button for wrong answers.
  */
 export function FeedbackPanel({
   isCorrect,
@@ -25,6 +27,7 @@ export function FeedbackPanel({
   studyTip,
   confidence,
   setConfidence,
+  onAskAI,
 }: FeedbackPanelProps) {
   return (
     <div className="space-y-3">
@@ -53,6 +56,26 @@ export function FeedbackPanel({
           </p>
         )}
       </div>
+
+      {/* Ask AI — only for wrong answers */}
+      {!isCorrect && onAskAI && (
+        <button
+          onClick={onAskAI}
+          className="w-full flex items-center justify-center gap-2 rounded-2xl border-2 border-violet-200 dark:border-violet-800 bg-gradient-to-br from-violet-50 to-indigo-50 dark:from-violet-950/30 dark:to-indigo-950/20 p-4 transition-all hover:from-violet-100 hover:to-indigo-100 dark:hover:from-violet-950/50 dark:hover:to-indigo-950/40 hover:border-violet-300 dark:hover:border-violet-700 group"
+        >
+          <div className="h-8 w-8 rounded-xl bg-gradient-to-br from-violet-500 to-indigo-600 grid place-items-center shadow-sm group-hover:shadow-md transition-shadow">
+            <Bot className="h-4 w-4 text-white" />
+          </div>
+          <div className="text-right">
+            <div className="text-sm font-semibold text-violet-700 dark:text-violet-300">
+              لماذا أخطأت؟ اسأل المساعد الذكي
+            </div>
+            <div className="text-[10px] text-violet-600/60 dark:text-violet-400/60">
+              شرح مبسط مع تحليل للإجابة الصحيحة
+            </div>
+          </div>
+        </button>
+      )}
 
       {/* Study tip */}
       {studyTip && (

@@ -1,10 +1,12 @@
 // =====================================================================
 // AI Study Buddy — Streaming API Route
 // Uses Gemini generateContentStream to stream responses token-by-token
+// Messages are persisted to the database via ChatSession + ChatMessage
 // =====================================================================
 
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { db } from "@/lib/db";
 import { getGeminiClient, getAIModelName } from "@/server/ai/evaluator";
 
 // -------------------------------------------------------------------
@@ -21,7 +23,7 @@ interface BuddyMessage {
 // -------------------------------------------------------------------
 
 function buildSystemPrompt(): string {
-  return `أنت مساعد تعليمي ذكي اسمه "همّة" لطالب يدرس اختبار القدرات اللفظية في المملكة العربية السعودية.
+  return `أنت مساعد تعليمي ذكي اسمه \"همّة\" لطالب يدرس اختبار القدرات اللفظية في المملكة العربية السعودية.
 
 📚 **تخصصك:**
 - التناظر اللفظي (Verbal Analogy)
@@ -49,21 +51,84 @@ function buildSystemPrompt(): string {
 }
 
 // -------------------------------------------------------------------
-// POST — stream AI response
+// GET — load a session's messages (for restoring on page refresh)
 // -------------------------------------------------------------------
 
-export async function POST(request: Request) {
-  // ── Authenticate ─────────────────────────────────────────────
+export async function GET(request: Request) {
   const session = await getServerSession(authOptions);
-  if (!session?.user) {
+  if (!session?.user?.id) {
     return new Response(
       JSON.stringify({ error: "يجب تسجيل الدخول أولاً" }),
       { status: 401, headers: { "Content-Type": "application/json" } }
     );
   }
+  const userId = session.user.id;
+
+  const url = new URL(request.url);
+  const sessionId = url.searchParams.get("sessionId");
+
+  if (!sessionId) {
+    return new Response(
+      JSON.stringify({ error: "معرّف الجلسة مطلوب" }),
+      { status: 400, headers: { "Content-Type": "application/json" } }
+    );
+  }
+
+  const chatSession = await db.chatSession.findUnique({
+    where: { id: sessionId },
+    include: {
+      messages: { orderBy: { createdAt: "asc" } },
+    },
+  });
+
+  if (!chatSession || chatSession.userId !== userId) {
+    return new Response(
+      JSON.stringify({ error: "الجلسة غير موجودة" }),
+      { status: 404, headers: { "Content-Type": "application/json" } }
+    );
+  }
+
+  return Response.json({
+    session: { id: chatSession.id, title: chatSession.title },
+    messages: chatSession.messages.map((m) => ({
+      role: m.role as "user" | "assistant",
+      content: m.content,
+    })),
+  });
+}
+
+// -------------------------------------------------------------------
+// Helpers
+// -------------------------------------------------------------------
+
+/** Trim message to a short session title */
+function autoTitle(text: string): string {
+  const cleaned = text.replace(/[\n\r]+/g, " ").slice(0, 50);
+  if (cleaned.length <= 3) return "محادثة جديدة";
+  return cleaned.length > 40 ? cleaned.slice(0, 40) + "…" : cleaned;
+}
+
+// -------------------------------------------------------------------
+// POST — stream AI response + persist messages
+// -------------------------------------------------------------------
+
+export async function POST(request: Request) {
+  // ── Authenticate ─────────────────────────────────────────────
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) {
+    return new Response(
+      JSON.stringify({ error: "يجب تسجيل الدخول أولاً" }),
+      { status: 401, headers: { "Content-Type": "application/json" } }
+    );
+  }
+  const userId = session.user.id;
 
   // ── Parse request ─────────────────────────────────────────────
-  let body: { history?: BuddyMessage[]; message?: string };
+  let body: {
+    history?: BuddyMessage[];
+    message?: string;
+    sessionId?: string | null;
+  };
   try {
     body = await request.json();
   } catch {
@@ -73,7 +138,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const { history = [], message } = body;
+  const { history = [], message, sessionId: incomingSessionId } = body;
 
   if (!message?.trim()) {
     return new Response(
@@ -93,6 +158,41 @@ export async function POST(request: Request) {
       { status: 503, headers: { "Content-Type": "application/json" } }
     );
   }
+
+  // ── Session management ─────────────────────────────────────────
+  let activeSessionId: string;
+  let isNewSession = false;
+
+  if (incomingSessionId) {
+    // Verify the session exists and belongs to this user
+    const existingSession = await db.chatSession.findUnique({
+      where: { id: incomingSessionId },
+      select: { userId: true },
+    });
+    if (!existingSession || existingSession.userId !== userId) {
+      return new Response(
+        JSON.stringify({ error: "الجلسة غير موجودة أو غير مصرح بها" }),
+        { status: 401, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    activeSessionId = incomingSessionId;
+  } else {
+    // Create a new session
+    const newSession = await db.chatSession.create({
+      data: { userId, title: autoTitle(message) },
+    });
+    activeSessionId = newSession.id;
+    isNewSession = true;
+  }
+
+  // ── Save user message ──────────────────────────────────────────
+  await db.chatMessage.create({
+    data: {
+      sessionId: activeSessionId,
+      role: "user",
+      content: message,
+    },
+  });
 
   // ── Build Gemini request ────────────────────────────────────────
   const modelName = getAIModelName();
@@ -139,22 +239,56 @@ export async function POST(request: Request) {
 
     const stream = new ReadableStream({
       async start(controller) {
+        let fullResponse = "";
+        let hasSentSessionId = !isNewSession; // only send sessionId once if new
+
         try {
           for await (const chunk of streamingResult) {
             const text = chunk.text();
             if (text) {
-              // SSE format: data: <text>\n\n
-              const event = `data: ${JSON.stringify({ text })}\n\n`;
+              fullResponse += text;
+
+              // Build SSE event with optional sessionId on first chunk
+              const payload: Record<string, string> = { text };
+              if (!hasSentSessionId) {
+                payload.sessionId = activeSessionId;
+                hasSentSessionId = true;
+              }
+              const event = `data: ${JSON.stringify(payload)}\n\n`;
               controller.enqueue(encoder.encode(event));
             }
           }
-          // Signal completion
+
+          // ── Save assistant message to DB ──────────────────────
+          if (fullResponse) {
+            await db.chatMessage.create({
+              data: {
+                sessionId: activeSessionId,
+                role: "assistant",
+                content: fullResponse,
+              },
+            });
+            // Touch updatedAt
+            await db.chatSession.update({
+              where: { id: activeSessionId },
+              data: { updatedAt: new Date() },
+            });
+          }
+
+          // Signal completion (include sessionId for new sessions that had no text)
+          const donePayload: Record<string, string> = {};
+          donePayload.type = "done";
+          if (!hasSentSessionId) {
+            donePayload.sessionId = activeSessionId;
+          }
+          controller.enqueue(
+            encoder.encode(`data: ${JSON.stringify(donePayload)}\n\n`)
+          );
           controller.enqueue(encoder.encode("data: [DONE]\n\n"));
           controller.close();
         } catch (e) {
           const errorMsg =
             e instanceof Error ? e.message : "حدث خطأ غير متوقع";
-          // Send error as a data: event so the client's SSE parser can read it
           const errorEvent = `data: ${JSON.stringify({ error: errorMsg })}\n\n`;
           try {
             controller.enqueue(encoder.encode(errorEvent));
@@ -174,9 +308,15 @@ export async function POST(request: Request) {
       },
     });
   } catch (e) {
-    console.error("[AI Study Buddy] Gemini streaming error:", (e as Error).message);
+    console.error(
+      "[AI Study Buddy] Gemini streaming error:",
+      (e as Error).message
+    );
     return new Response(
-      JSON.stringify({ error: "حدث خطأ في الاتصال بالمساعد الذكي. حاول مرة أخرى." }),
+      JSON.stringify({
+        error:
+          "حدث خطأ في الاتصال بالمساعد الذكي. حاول مرة أخرى.",
+      }),
       { status: 500, headers: { "Content-Type": "application/json" } }
     );
   }

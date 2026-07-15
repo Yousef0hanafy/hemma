@@ -184,6 +184,26 @@ export function DashboardView() {
               <div className="text-emerald-100/80 text-xs sm:text-sm mt-1">
                 أيام متتالية
               </div>
+
+              {/* Streak milestone celebration */}
+              {profile && profile.currentStreak >= 3 && (
+                <div className="mt-2">
+                  <span className="inline-flex items-center gap-1 rounded-full bg-white/15 backdrop-blur-sm px-2.5 py-0.5 text-[10px] font-semibold text-amber-200 whitespace-nowrap">
+                    {profile.currentStreak >= 100
+                      ? "🔥 ١٠٠ يوم — أسطورة!"
+                      : profile.currentStreak >= 60
+                      ? "🔥 ٦٠ يوم — مستمر!"
+                      : profile.currentStreak >= 30
+                      ? "🔥 شهر كامل! 🎉"
+                      : profile.currentStreak >= 14
+                      ? "🔥 أسبوعان كاملان!"
+                      : profile.currentStreak >= 7
+                      ? "🔥 أسبوع كامل!"
+                      : "🔥 بداية قوية!"}
+                  </span>
+                </div>
+              )}
+
               {profile && profile.streakShields > 0 && (
                 <div className="flex items-center justify-center gap-1 mt-2 text-orange-200 text-xs">
                   <Shield className="h-3 w-3" />
@@ -512,6 +532,49 @@ export function DashboardView() {
           )}
         </motion.div>
       </div>
+
+      {/* ============ DUE REVIEWS CARD ============ */}
+      {dueReviewCount != null && dueReviewCount > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.22 }}
+        >
+          <div className="rounded-2xl bg-gradient-to-bl from-violet-600 to-indigo-700 dark:from-violet-700 dark:to-indigo-800 text-white p-4 sm:p-5 shadow-lg">
+            <div className="flex items-start gap-4">
+              <div className="h-12 w-12 rounded-xl bg-white/15 grid place-items-center shrink-0">
+                <RefreshCw className="h-6 w-6" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="font-bold text-lg mb-0.5">
+                  {toArabicDigits(dueReviewCount)} مراجعة مستحقة
+                </div>
+                <p className="text-sm text-white/80 leading-relaxed">
+                  لديك {toArabicDigits(dueReviewCount)} سؤالًا بحاجة للمراجعة اليوم.
+                  التكرار المتباعد يساعد على تثبيت المعلومات في ذاكرتك طويلة المدى.
+                </p>
+                <div className="mt-3">
+                  <button
+                    onClick={() =>
+                      setView({ kind: "revision", tab: "flashcards" })
+                    }
+                    className="inline-flex items-center gap-1.5 rounded-full bg-white text-violet-700 px-5 py-2.5 text-xs font-bold hover:bg-white/90 active:scale-95 transition-all shadow-sm"
+                  >
+                    <BookOpen className="h-3.5 w-3.5" />
+                    <span>ابدأ المراجعة الآن</span>
+                  </button>
+                </div>
+              </div>
+              {/* Large number decoration */}
+              <div className="hidden sm:flex items-center justify-center h-12 w-12 rounded-xl bg-white/10 shrink-0">
+                <span className="text-2xl font-bold tabular-nums">
+                  {toArabicDigits(dueReviewCount)}
+                </span>
+              </div>
+            </div>
+          </div>
+        </motion.div>
+      )}
 
       {/* ============ MASTERY RINGS ============ */}
       <motion.section
