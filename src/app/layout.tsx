@@ -1,9 +1,13 @@
 import type { Metadata, Viewport } from "next";
-import { Cairo, Noto_Naskh_Arabic, Amiri } from "next/font/google";
+import { Cairo, Amiri } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as SonnerToaster } from "sonner";
 import { SplashScreen } from "@/components/qudurat/SplashScreen";
+import { SessionProvider } from "@/components/providers/SessionProvider";
+import { ThemeProvider } from "@/components/providers/ThemeProvider";
+import { ServiceWorkerRegister } from "@/components/providers/ServiceWorkerRegister";
+import { OfflineIndicator } from "@/components/providers/OfflineIndicator";
 
 const cairo = Cairo({
   variable: "--font-cairo",
@@ -12,22 +16,18 @@ const cairo = Cairo({
   display: "swap",
 });
 
-const naskh = Noto_Naskh_Arabic({
+const naskh = Amiri({
   variable: "--font-naskh",
-  subsets: ["arabic", "latin"],
-  weight: ["400", "500", "600", "700"],
-  display: "swap",
-});
-
-const amiri = Amiri({
-  variable: "--font-amiri",
   subsets: ["arabic", "latin"],
   weight: ["400", "700"],
   display: "swap",
 });
 
+// Dynamically resolve the site URL from NEXTAUTH_URL (production) or fallback for dev
+const siteUrl = process.env.NEXTAUTH_URL || "http://localhost:3000";
+
 export const metadata: Metadata = {
-  metadataBase: new URL("https://hema-lms.example.com"),
+  metadataBase: new URL(siteUrl),
   title: "منصة همّة التعليمية — التحضير المتميّز لاختبار القدرات",
   description:
     "منصة همّة التعليمية: منصّة تعليمية متكاملة لتحضير اختبار القدرات اللفظية مع وضع المذاكرة، الاختبارات الوقتية، المراجعة الذكية، ونظام التتبّع التقدّم والإتقان.",
@@ -63,7 +63,7 @@ export const metadata: Metadata = {
     title: "منصة همّة التعليمية — التحضير المتميّز لاختبار القدرات",
     description:
       "منصّة تعليمية متكاملة لتحضير اختبار القدرات اللفظية مع وضع المذاكرة، الاختبارات الوقتية، والمراجعة الذكية.",
-    url: "https://hema-lms.example.com",
+    url: siteUrl,
     siteName: "منصة همّة التعليمية",
     images: [{ url: "/og-image.png", width: 1200, height: 630, alt: "منصة همّة التعليمية" }],
     type: "website",
@@ -103,12 +103,16 @@ export default function RootLayout({
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
       </head>
       <body
-        className={`${cairo.variable} ${naskh.variable} ${amiri.variable} font-sans antialiased bg-background text-foreground`}
+        className={`${cairo.variable} ${naskh.variable} font-sans antialiased bg-background text-foreground`}
       >
-        <SplashScreen />
-        {children}
-        <Toaster />
-        <SonnerToaster
+        <ServiceWorkerRegister />
+        <OfflineIndicator />
+        <ThemeProvider>
+        <SessionProvider>
+          <SplashScreen />
+          {children}
+          <Toaster />
+          <SonnerToaster
           position="top-center"
           richColors
           closeButton
@@ -117,8 +121,9 @@ export default function RootLayout({
               fontFamily: "var(--font-cairo), sans-serif",
               direction: "rtl",
             },
-          }}
-        />
+          }}          />
+        </SessionProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

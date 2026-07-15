@@ -2,7 +2,7 @@
 // Client-side types & deserialization helpers
 // =====================================================================
 
-import type { Question, Category, Source, Attempt } from "@prisma/client";
+import type { Question, Category, Source, Attempt, Passage } from "@prisma/client";
 
 export type ArabicLetter = "أ" | "ب" | "ج" | "د";
 export type Difficulty = "easy" | "medium" | "hard";
@@ -11,6 +11,12 @@ export type StudyMode = "study" | "exam" | "revision" | "flashcard";
 export interface QuestionOption {
   key: ArabicLetter;
   text: string;
+}
+
+export interface PassageInfo {
+  id: string;
+  titleAr: string | null;
+  bodyAr: string;
 }
 
 export interface QuestionDTO {
@@ -31,6 +37,7 @@ export interface QuestionDTO {
   difficulty: Difficulty;
   tags: string[];
   citation: string | null;
+  passage: PassageInfo | null;
 }
 
 export interface CategoryDTO {
@@ -97,6 +104,26 @@ export interface CategoryMastery {
   mastery: number; // 0..100
 }
 
+export interface RecentCategoryInfo {
+  categorySlug: string;
+  categoryNameAr: string;
+  colorTheme: string | null;
+  icon: string | null;
+  lastAttemptAt: string;
+  attempted: number;
+  correct: number;
+  accuracy: number; // 0..100
+}
+
+export interface SpeedStatDTO {
+  categorySlug: string;
+  categoryNameAr: string;
+  colorTheme: string | null;
+  attempted: number;
+  /** Average time per question in seconds */
+  avgTimeSec: number;
+}
+
 export interface DailyActivityDTO {
   date: string;
   attempts: number;
@@ -104,12 +131,33 @@ export interface DailyActivityDTO {
   xpEarned: number;
 }
 
+export interface ReviewScheduleDTO {
+  questionId: string;
+  easiness: number;
+  interval: number;
+  repetitions: number;
+  nextReviewAt: string;
+  lastReviewedAt: string | null;
+}
+
+export interface ExamSessionDTO {
+  sessionId: string;
+  /** ISO date of the first attempt in the session */
+  date: string;
+  total: number;
+  correct: number;
+  wrong: number;
+  skipped: number;
+  scorePercent: number;
+  durationSec: number;
+}
+
 // ---------------------------------------------------------------------------
 // Deserialization helpers — convert Prisma rows to DTOs
 // ---------------------------------------------------------------------------
 
 export function toQuestionDTO(
-  q: Question & { category: Category; source: Source }
+  q: Question & { category: Category; source: Source; passage: Passage | null }
 ): QuestionDTO {
   return {
     id: q.id,
@@ -129,6 +177,13 @@ export function toQuestionDTO(
     difficulty: q.difficulty as Difficulty,
     tags: JSON.parse(q.tags) as string[],
     citation: q.citation,
+    passage: q.passage
+      ? {
+          id: q.passage.id,
+          titleAr: q.passage.titleAr,
+          bodyAr: q.passage.bodyAr,
+        }
+      : null,
   };
 }
 

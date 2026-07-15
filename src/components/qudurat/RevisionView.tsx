@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useViewStore } from "@/lib/store/view-store";
 import {
@@ -9,19 +9,27 @@ import {
   useQuestionsByIds,
   useQuestions,
   useCategories,
+  useDueReviewIds,
+  useDueReviewCount,
+  useSubmitSrsReview,
+  useTodayReviewCount,
 } from "@/lib/hooks/use-data";
-import { categoryMeta, toArabicDigits, DIFFICULTY_META } from "@/lib/content/ui-helpers";
+import type { SrsQuality } from "@/lib/engine/srs";
+import { categoryMeta, toArabicDigits, getColorHex } from "@/lib/content/ui-helpers";
 import { cn } from "@/lib/utils";
 import {
   RefreshCw,
   Bookmark,
   Layers,
-  ArrowLeft,
   ChevronLeft,
   Sprout,
   Heart,
-  Zap,
+  Brain,
+  Play,
+  Target,
 } from "lucide-react";
+import { EmptyStateCard } from "./shared/EmptyStates";
+import { AnimatedChip } from "./shared/AnimatedChip";
 import { FullScreenLoader } from "./LoadingStates";
 
 type Tab = "mistakes" | "favorites" | "flashcards";
@@ -38,6 +46,12 @@ export function RevisionView({ initialTab }: { initialTab: Tab }) {
           حديقة الأخطاء تنمو معك — كل خطأ يتحوّل إلى فرصة للتعلّم.
         </p>
       </div>
+
+      {/* Daily Review Goal */}
+      <DailyReviewGoal />
+
+      {/* SRS Due Review Banner */}
+      <DueReviewBanner />
 
       {/* Tabs */}
       <div className="flex gap-1 rounded-full bg-muted p-1 max-w-md">
@@ -109,6 +123,114 @@ function TabButton({
 
 // ---------------------------------------------------------------------------
 
+function DueReviewBanner() {
+  const { setView } = useViewStore();
+  const { data: dueCount } = useDueReviewCount();
+  const { data: dueIds } = useDueReviewIds(100);
+
+  if (!dueCount || dueCount === 0) return null;
+
+  const startReview = () => {
+    if (!dueIds || dueIds.length === 0) return;
+    setView({
+      kind: "study",
+      questionIds: dueIds.slice(0, 50),
+      purpose: "review",
+    });
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -8 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="rounded-2xl bg-gradient-to-br from-violet-600 to-indigo-700 dark:from-violet-700 dark:to-indigo-800 p-5 text-white shadow-lg"
+    >
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex items-start gap-3">
+          <div className="h-10 w-10 rounded-xl bg-white/15 grid place-items-center shrink-0">
+            <Brain className="h-5 w-5" />
+          </div>
+          <div>
+            <div className="font-bold mb-0.5">
+              مراجعة التكرار المتباعد
+            </div>
+            <div className="text-sm text-white/80">
+              لديك{" "}
+              <span className="font-bold text-white tabular-nums">
+                {toArabicDigits(dueCount)}
+              </span>{" "}
+              بطاقة مستحقة للمراجعة الآن
+            </div>
+          </div>
+        </div>
+        <button
+          onClick={startReview}
+          className="shrink-0 inline-flex items-center gap-1.5 rounded-full bg-white text-violet-700 px-5 py-2.5 text-sm font-bold hover:bg-white/90 active:scale-95 transition-all shadow-sm"
+        >
+          <Play className="h-4 w-4 fill-current" />
+          <span>ابدأ المراجعة</span>
+        </button>
+      </div>
+    </motion.div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+
+function DailyReviewGoal() {
+  const { data: todayCount } = useTodayReviewCount();
+
+  if (todayCount === null) return null; // still loading
+
+  const DAILY_GOAL = 10;
+  const count = todayCount ?? 0;
+  const percent = Math.min(100, Math.round((count / DAILY_GOAL) * 100));
+  const complete = count >= DAILY_GOAL;
+
+  const progressColor = complete
+    ? "bg-emerald-500"
+    : percent >= 70
+    ? "bg-violet-500"
+    : percent >= 30
+    ? "bg-amber-500"
+    : "bg-violet-400";
+
+  const message = complete
+    ? "أكملت هدف اليوم! 🎉"
+    : `${toArabicDigits(DAILY_GOAL - count)} مراجعات متبقية`;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -4 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="rounded-xl bg-card border border-border p-3"
+    >
+      <div className="flex items-center justify-between gap-2 mb-2">
+        <div className="flex items-center gap-2">
+          <Target className="h-4 w-4 text-muted-foreground" />
+          <span className="text-xs font-semibold">هدف المراجعة اليومي</span>
+        </div>
+        <span className="text-xs tabular-nums font-bold">
+          {toArabicDigits(count)} / {toArabicDigits(DAILY_GOAL)}
+        </span>
+      </div>
+      <div className="h-2 rounded-full bg-muted overflow-hidden">
+        <motion.div
+          className={`h-full rounded-full ${progressColor}`}
+          initial={{ width: 0 }}
+          animate={{ width: `${percent}%` }}
+          transition={{ duration: 0.6, ease: "easeOut" }}
+        />
+      </div>
+      <div className="text-[10px] text-muted-foreground mt-1.5">
+        {message}
+      </div>
+    </motion.div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+
 function MistakesList() {
   const { setView } = useViewStore();
   const { data: mistakeIds, loading } = useMistakeQuestionIds(100);
@@ -121,12 +243,22 @@ function MistakesList() {
 
   if (!questions || questions.length === 0) {
     return (
-      <EmptyState
-        icon={<Sprout className="h-12 w-12" />}
-        title="حديقة أخطائك فارغة!"
-        subtitle="لم تخطئ في أي سؤال بعد. ابدأ المذاكرة وستنمو هنا بذور تحتاج عناية."
-        actionLabel="ابدأ المذاكرة"
-        onAction={() => setView({ kind: "study_setup" })}
+      <EmptyStateCard
+        illustration="mistakes"
+        title="حديقة أخطائك فارغة! 🌱"
+        description="لم تخطئ في أي سؤال بعد — وهذا رائع! ابدأ المذاكرة وستنمو هنا البذور التي تحتاج عناية. الأخطاء هي فرصتك الحقيقية للتعلّم."
+        suggestions={[
+          {
+            label: "ابدأ المذاكرة",
+            onClick: () => setView({ kind: "study_setup" }),
+            variant: "primary",
+          },
+          {
+            label: "اختبر نفسك",
+            onClick: () => setView({ kind: "exam_setup" }),
+            variant: "secondary",
+          },
+        ]}
       />
     );
   }
@@ -143,6 +275,7 @@ function MistakesList() {
     setView({
       kind: "study",
       questionIds: questions.slice(0, 15).map((q) => q.id),
+      purpose: "review",
     });
   };
 
@@ -170,7 +303,7 @@ function MistakesList() {
         return (
           <div key={slug} className="space-y-2">
             <div className="flex items-center gap-2">
-              <span className={cn("h-2 w-2 rounded-full", `bg-${meta.color}-500`)} style={{ backgroundColor: meta.color === "emerald" ? "#10b981" : meta.color === "amber" ? "#f59e0b" : meta.color === "rose" ? "#f43f5e" : meta.color === "violet" ? "#8b5cf6" : meta.color === "cyan" ? "#06b6d4" : "#64748b" }} />
+              <span className="h-2 w-2 rounded-full" style={{ backgroundColor: getColorHex(meta.color).stroke }} />
               <span className="text-sm font-semibold">{cat?.nameAr ?? qs[0]?.categoryNameAr}</span>
               <span className="text-xs text-muted-foreground">({toArabicDigits(qs.length)})</span>
             </div>
@@ -178,7 +311,7 @@ function MistakesList() {
               {qs.map((q) => (
                 <button
                   key={q.id}
-                  onClick={() => setView({ kind: "study", questionIds: [q.id] })}
+                  onClick={() => setView({ kind: "study", questionIds: [q.id], purpose: "review" })}
                   className="rounded-xl bg-card border border-border p-3 text-right hover:border-primary/40 hover:shadow-sm transition-all"
                 >
                   <div className="flex items-start gap-2">
@@ -213,12 +346,17 @@ function FavoritesList() {
 
   if (!questions || questions.length === 0) {
     return (
-      <EmptyState
-        icon={<Heart className="h-12 w-12" />}
+      <EmptyStateCard
+        illustration="favorites"
         title="لا توجد أسئلة في المفضلة"
-        subtitle="أضف الأسئلة المهمة إلى المفضلة أثناء المذاكرة للرجوع إليها بسهولة."
-        actionLabel="ابدأ المذاكرة"
-        onAction={() => setView({ kind: "study_setup" })}
+        description="أضف الأسئلة المُهمّة إلى المفضلة أثناء المذاكرة بالضغط على علامة النجمة 🌟. المفضلة تساعدك على العودة للأسئلة البارزة بسرعة."
+        suggestions={[
+          {
+            label: "ابدأ المذاكرة",
+            onClick: () => setView({ kind: "study_setup" }),
+            variant: "primary",
+          },
+        ]}
       />
     );
   }
@@ -231,7 +369,7 @@ function FavoritesList() {
         return (
           <button
             key={q.id}
-            onClick={() => setView({ kind: "study", questionIds: [q.id] })}
+            onClick={() => setView({ kind: "study", questionIds: [q.id], purpose: "review" })}
             className="w-full rounded-xl bg-card border border-border p-3.5 text-right hover:border-primary/40 hover:shadow-sm transition-all flex items-start gap-3"
           >
             <div className={cn("h-9 w-9 rounded-lg grid place-items-center shrink-0", meta.bg, meta.text)}>
@@ -253,22 +391,95 @@ function FavoritesList() {
 
 function FlashcardPlayer() {
   const { data: categories } = useCategories();
+  const { data: mistakeIds, loading: mistakesLoading } = useMistakeQuestionIds(100);
+  const { data: dueIds, loading: dueLoading } = useDueReviewIds(100);
+  const { data: allQuestions, loading: questionsLoading } = useQuestions({ limit: 200 });
+  const submitReview = useSubmitSrsReview();
   const [selectedCat, setSelectedCat] = useState<string | undefined>(undefined);
-  const { data: allQuestions } = useQuestions({ limit: 200 });
-
   const [cardIndex, setCardIndex] = useState(0);
   const [flipped, setFlipped] = useState(false);
+  const [rated, setRated] = useState(false);
 
+  // Build the card queue: first due reviews, then mistakes that aren't yet scheduled
   const flashcards = useMemo(() => {
     if (!allQuestions) return [];
-    if (selectedCat) return allQuestions.filter((q) => q.categorySlug === selectedCat);
-    return allQuestions;
-  }, [allQuestions, selectedCat]);
+
+    const dueSet = new Set(dueIds ?? []);
+    const mistakeSet = new Set(mistakeIds ?? []);
+    const seen = new Set<string>();
+    const queue: typeof allQuestions = [];
+
+    // 1. Due reviews first
+    for (const id of dueIds ?? []) {
+      const q = allQuestions.find((q) => q.id === id);
+      if (q && !seen.has(q.id)) {
+        if (!selectedCat || q.categorySlug === selectedCat) {
+          queue.push(q);
+          seen.add(q.id);
+        }
+      }
+    }
+
+    // 2. Mistakes not yet scheduled
+    for (const id of mistakeIds ?? []) {
+      if (dueSet.has(id)) continue; // already in queue
+      const q = allQuestions.find((q) => q.id === id);
+      if (q && !seen.has(q.id)) {
+        if (!selectedCat || q.categorySlug === selectedCat) {
+          queue.push(q);
+          seen.add(q.id);
+        }
+      }
+    }
+
+    // 3. All other questions (up to a reasonable limit)
+    if (queue.length < 30) {
+      for (const q of allQuestions) {
+        if (seen.has(q.id)) continue;
+        if (!selectedCat || q.categorySlug === selectedCat) {
+          queue.push(q);
+          seen.add(q.id);
+          if (queue.length >= 50) break;
+        }
+      }
+    }
+
+    return queue;
+  }, [allQuestions, dueIds, mistakeIds, selectedCat]);
 
   const current = flashcards[cardIndex];
+  const isDue = dueIds?.includes(current?.id ?? "") ?? false;
 
-  const next = () => {
+  // Keyboard shortcut: Space/Enter to flip card
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === " " || e.key === "Enter") {
+        e.preventDefault();
+        if (!flipped) setFlipped(true);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [flipped]);
+
+  const handleRate = async (quality: SrsQuality) => {
+    if (!current || rated) return;
+    setRated(true);
+    try {
+      await submitReview(current.id, quality);
+      // Auto-advance after a brief moment
+      setTimeout(() => {
+        nextCard();
+      }, 400);
+    } catch (e) {
+      console.error(e);
+      setRated(false);
+    }
+  };
+
+  const nextCard = () => {
     setFlipped(false);
+    setRated(false);
     setTimeout(() => {
       setCardIndex((i) => (i + 1) % Math.max(flashcards.length, 1));
     }, 150);
@@ -278,52 +489,96 @@ function FlashcardPlayer() {
     return <FullScreenLoader label="جارٍ تحضير البطاقات…" />;
   }
 
+  // Show loader while any data source is still loading
+  // (prevents briefly flashing the "لا توجد بطاقات" empty state when
+  // allQuestions loaded but dueIds/mistakeIds haven't arrived yet)
+  if (questionsLoading || mistakesLoading || dueLoading) {
+    return <FullScreenLoader label="جارٍ تحضير البطاقات…" />;
+  }
+
+  const dueCount = dueIds?.length ?? 0;
+  const totalCards = flashcards.length;
+
   return (
     <div className="space-y-4">
       {/* Category filter */}
       <div className="flex flex-wrap gap-1.5">
-        <FilterChip
+        <AnimatedChip
+          variant="pill"
           active={!selectedCat}
-          onClick={() => { setSelectedCat(undefined); setCardIndex(0); setFlipped(false); }}
+          onClick={() => { setSelectedCat(undefined); setCardIndex(0); setFlipped(false); setRated(false); }}
           label="الكل"
         />
         {(categories ?? []).map((c) => (
-          <FilterChip
+          <AnimatedChip
             key={c.id}
+            variant="pill"
             active={selectedCat === c.slug}
-            onClick={() => { setSelectedCat(c.slug); setCardIndex(0); setFlipped(false); }}
+            onClick={() => { setSelectedCat(c.slug); setCardIndex(0); setFlipped(false); setRated(false); }}
             label={c.nameAr}
           />
         ))}
       </div>
 
+      {/* Due count badge */}
+      {dueCount > 0 && (
+        <div className="flex items-center justify-between rounded-xl bg-violet-50 dark:bg-violet-950/30 border border-violet-200 dark:border-violet-800 px-4 py-2">
+          <div className="flex items-center gap-2 text-sm">
+            <Brain className="h-4 w-4 text-violet-600 dark:text-violet-400" />
+            <span className="font-semibold text-violet-700 dark:text-violet-300">
+              {toArabicDigits(dueCount)} بطاقة للمراجعة
+            </span>
+          </div>
+          <span className="text-xs text-muted-foreground tabular-nums">
+            {toArabicDigits(cardIndex + 1)} / {toArabicDigits(totalCards)}
+          </span>
+        </div>
+      )}
+
       {flashcards.length === 0 ? (
-        <div className="text-center py-12 text-muted-foreground">لا توجد بطاقات في هذه الفئة.</div>
-      ) : (
+        <EmptyStateCard
+          illustration="flashcards"
+          title="لا توجد بطاقات للمراجعة"
+          description="ابدأ المذاكرة أو الاختبارات لتظهر هنا البطاقات المستحقة للمراجعة بناءً على نظام التكرار المتباعد (SM-2). كل بطاقة تظهر في وقتها المثالي لتثبيت المعلومة."
+          suggestions={[
+            {
+              label: "ابدأ المذاكرة",
+              onClick: () => setView({ kind: "study_setup" }),
+              variant: "primary",
+            },
+            {
+              label: "اختبر نفسك",
+              onClick: () => setView({ kind: "exam_setup" }),
+              variant: "secondary",
+            },
+          ]}
+        />
+      ) : !current ? null : (
         <>
           {/* Card */}
           <div className="perspective-1000">
             <motion.button
-              onClick={() => setFlipped(!flipped)}
-              className="w-full h-72 relative preserve-3d"
+              onClick={() => !flipped && setFlipped(true)}
+              className="w-full h-80 relative preserve-3d cursor-pointer"
               animate={{ rotateY: flipped ? 180 : 0 }}
               transition={{ duration: 0.5 }}
-              style={{ transformStyle: "preserve-3d" }}
             >
               {/* Front — question */}
-              <div
-                className="absolute inset-0 rounded-3xl bg-card border-2 border-border p-6 flex flex-col items-center justify-center backface-hidden"
-                style={{ backfaceVisibility: "hidden" }}
-              >
-                <div className="absolute top-4 right-4 text-xs text-muted-foreground">
-                  {toArabicDigits(cardIndex + 1)} / {toArabicDigits(flashcards.length)}
+              <div className="absolute inset-0 rounded-3xl bg-card border-2 border-border p-6 flex flex-col items-center justify-center backface-hidden">
+                <div className="absolute top-4 left-4 text-xs text-muted-foreground">
+                  {isDue ? (
+                    <span className="inline-flex items-center gap-1 text-violet-600 dark:text-violet-400">
+                      <Brain className="h-3 w-3" />
+                      <span>مراجعة</span>
+                    </span>
+                  ) : null}
                 </div>
                 <div className="text-center">
                   <div className="text-[10px] text-muted-foreground mb-3">
-                    {current?.categoryNameAr}
+                    {current.categoryNameAr}
                   </div>
                   <p className="font-naskh text-xl leading-loose">
-                    {current?.stem}
+                    {current.stem}
                   </p>
                 </div>
                 <div className="absolute bottom-4 text-[10px] text-muted-foreground">
@@ -334,22 +589,17 @@ function FlashcardPlayer() {
               {/* Back — answer */}
               <div
                 className="absolute inset-0 rounded-3xl bg-primary text-primary-foreground p-6 flex flex-col items-center justify-center backface-hidden"
-                style={{
-                  backfaceVisibility: "hidden",
-                  transform: "rotateY(180deg)",
-                }}
+                style={{ transform: "rotateY(180deg)" }}
               >
                 <div className="text-center">
                   <div className="text-xs opacity-80 mb-2">الإجابة الصحيحة</div>
                   <div className="text-4xl font-bold mb-3">
-                    {current?.correctKey}
+                    {current.correctKey}
                   </div>
-                  {current && (
-                    <p className="font-naskh text-sm leading-relaxed opacity-90 max-w-md">
-                      {current.options.find((o) => o.key === current.correctKey)?.text}
-                    </p>
-                  )}
-                  {current?.explanation && (
+                  <p className="font-naskh text-sm leading-relaxed opacity-90 max-w-md">
+                    {current.options.find((o) => o.key === current.correctKey)?.text}
+                  </p>
+                  {current.explanation && (
                     <p className="font-naskh text-xs leading-relaxed opacity-75 mt-3 max-w-md line-clamp-3">
                       {current.explanation.split("\n")[0]}
                     </p>
@@ -359,29 +609,76 @@ function FlashcardPlayer() {
             </motion.button>
           </div>
 
-          {/* Controls */}
-          <div className="flex items-center justify-center gap-3">
-            <button
-              onClick={() => { setFlipped(false); setCardIndex((i) => (i - 1 + flashcards.length) % flashcards.length); }}
-              className="p-3 rounded-full bg-card border border-border hover:bg-muted"
-              aria-label="السابق"
+          {/* Rating buttons — shown after flip */}
+          {flipped && !rated && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="flex flex-wrap justify-center gap-2"
             >
-              <ChevronLeft className="h-5 w-5" />
-            </button>
-            <button
-              onClick={() => setFlipped(!flipped)}
-              className="rounded-full bg-card border border-border px-6 py-2 text-xs font-semibold hover:bg-muted"
-            >
-              {flipped ? "إخفاء" : "اقلب"}
-            </button>
-            <button
-              onClick={next}
-              className="p-3 rounded-full bg-primary text-primary-foreground hover:bg-primary/90"
-              aria-label="التالي"
-            >
-              <ChevronLeft className="h-5 w-5 rotate-180" />
-            </button>
-          </div>
+              <RatingButton
+                label="مرة أخرى"
+                sublabel="نسيت"
+                quality={1}
+                color="rose"
+                onClick={() => handleRate(1)}
+              />
+              <RatingButton
+                label="صعب"
+                sublabel="بصعوبة تذكرت"
+                quality={2}
+                color="amber"
+                onClick={() => handleRate(2)}
+              />
+              <RatingButton
+                label="جيد"
+                sublabel="تذكرت بعد جهد"
+                quality={3}
+                color="emerald"
+                onClick={() => handleRate(3)}
+              />
+              <RatingButton
+                label="سهل"
+                sublabel="تذكرت فورًا"
+                quality={5}
+                color="primary"
+                onClick={() => handleRate(5)}
+              />
+            </motion.div>
+          )}
+
+          {/* Rated confirmation */}
+          {rated && (
+            <div className="text-center text-sm text-muted-foreground">
+              جارٍ الانتقال إلى البطاقة التالية…
+            </div>
+          )}
+
+          {/* Navigation controls (when not flipped or after rating) */}
+          {(!flipped || rated) && (
+            <div className="flex items-center justify-center gap-3">
+              <button
+                onClick={() => { setFlipped(false); setRated(false); setCardIndex((i) => (i - 1 + flashcards.length) % flashcards.length); }}
+                className="p-3 rounded-full bg-card border border-border hover:bg-muted"
+                aria-label="السابق"
+              >
+                <ChevronLeft className="h-5 w-5" />
+              </button>
+              <button
+                onClick={nextCard}
+                className="rounded-full bg-primary text-primary-foreground px-6 py-2 text-sm font-semibold hover:bg-primary/90"
+              >
+                تخطي
+              </button>
+              <button
+                onClick={nextCard}
+                className="p-3 rounded-full bg-primary text-primary-foreground hover:bg-primary/90"
+                aria-label="التالي"
+              >
+                <ChevronLeft className="h-5 w-5 rotate-180" />
+              </button>
+            </div>
+          )}
         </>
       )}
     </div>
@@ -390,57 +687,35 @@ function FlashcardPlayer() {
 
 // ---------------------------------------------------------------------------
 
-function FilterChip({
-  active,
-  onClick,
+const RATING_COLORS: Record<string, string> = {
+  rose: "border-rose-200 dark:border-rose-800 bg-rose-50 dark:bg-rose-950/30 text-rose-700 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-950/50",
+  amber: "border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-950/50",
+  emerald: "border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-950/50",
+  primary: "border-primary/30 bg-primary/5 text-primary hover:bg-primary/10",
+};
+
+function RatingButton({
   label,
+  sublabel,
+  quality,
+  color,
+  onClick,
 }: {
-  active: boolean;
-  onClick: () => void;
   label: string;
+  sublabel: string;
+  quality: number;
+  color: string;
+  onClick: () => void;
 }) {
   return (
     <button
       onClick={onClick}
-      className={cn(
-        "rounded-full px-3 py-1.5 text-xs font-semibold transition-colors",
-        active
-          ? "bg-primary text-primary-foreground"
-          : "bg-muted text-muted-foreground hover:bg-muted/70"
-      )}
+      className={`flex flex-col items-center gap-0.5 rounded-xl border-2 px-4 py-2.5 text-xs font-semibold transition-all hover:scale-105 active:scale-95 ${RATING_COLORS[color] ?? RATING_COLORS.primary}`}
     >
-      {label}
+      <span>{label}</span>
+      <span className="text-[10px] opacity-70">{sublabel}</span>
     </button>
   );
 }
 
-function EmptyState({
-  icon,
-  title,
-  subtitle,
-  actionLabel,
-  onAction,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  subtitle: string;
-  actionLabel: string;
-  onAction: () => void;
-}) {
-  return (
-    <div className="text-center py-16">
-      <div className="inline-flex h-20 w-20 rounded-3xl bg-muted items-center justify-center text-muted-foreground mb-4">
-        {icon}
-      </div>
-      <h3 className="font-display text-xl font-bold mb-2">{title}</h3>
-      <p className="text-sm text-muted-foreground max-w-sm mx-auto mb-6">{subtitle}</p>
-      <button
-        onClick={onAction}
-        className="inline-flex items-center gap-2 rounded-full bg-primary text-primary-foreground px-6 py-2.5 text-sm font-semibold hover:bg-primary/90"
-      >
-        {actionLabel}
-        <ArrowLeft className="h-4 w-4" />
-      </button>
-    </div>
-  );
-}
+

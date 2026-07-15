@@ -8,7 +8,7 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-cairo);
   --font-naskh: var(--font-naskh);
-  --font-display: var(--font-amiri);
+  --font-display: var(--font-naskh);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -148,10 +148,11 @@
     font-feature-settings: "kern", "liga", "calt";
     text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
+    transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
   }
   /* Arabic typography refinements */
   [lang="ar"], .font-naskh {
-    font-feature-settings: "kern", "liga", "calt", "init", "medi", "fina";
+    font-feature-settings: "kern", "liga", "calt", "rlig", "rclt";
     line-height: 1.9;
   }
   .font-display {
@@ -214,6 +215,17 @@
   from { opacity: 0; transform: translateY(8px); }
   to   { opacity: 1; transform: translateY(0); }
 }
+
+/* =====================================================================
+   Offline banner slide-down
+   ===================================================================== */
+@keyframes slide-down {
+  from { opacity: 0; transform: translateY(-100%); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-slide-down {
+  animation: slide-down 0.35s ease-out forwards;
+}
 .card-in {
   animation: card-in 0.4s ease-out forwards;
 }
@@ -249,7 +261,6 @@
   font-family: var(--font-naskh);
   font-size: 1.25rem;
   line-height: 2.1;
-  letter-spacing: 0.005em;
 }
 
 /* =====================================================================
@@ -280,4 +291,18 @@
   background: color-mix(in oklch, var(--background) 80%, transparent);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
+}
+
+/* =====================================================================
+   3D Card Flip Utilities — for Flashcards
+   ===================================================================== */
+.perspective-1000 {
+  perspective: 1000px;
+}
+.preserve-3d {
+  transform-style: preserve-3d;
+}
+.backface-hidden {
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
 }

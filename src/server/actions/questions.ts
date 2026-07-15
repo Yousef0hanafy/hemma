@@ -26,27 +26,22 @@ export interface QuestionFilter {
   sourceSlug?: string;
   difficulty?: string;
   search?: string;
+  hasPassage?: boolean; // true = only with passage, false = only without passage, undefined = all
   limit?: number;
 }
 
 export async function fetchQuestions(filter: QuestionFilter = {}) {
-  const where: Record<string, unknown> = {};
-  if (filter.categorySlug) {
-    where.category = { slug: filter.categorySlug };
-  }
-  if (filter.sourceSlug) {
-    where.source = { slug: filter.sourceSlug };
-  }
-  if (filter.difficulty) {
-    where.difficulty = filter.difficulty;
-  }
-  if (filter.search) {
-    where.stem = { contains: filter.search };
-  }
-
   const questions = await db.question.findMany({
-    where,
-    include: { category: true, source: true },
+    where: {
+      ...(filter.categorySlug && { category: { slug: filter.categorySlug } }),
+      ...(filter.sourceSlug && { source: { slug: filter.sourceSlug } }),
+      ...(filter.difficulty && { difficulty: filter.difficulty }),
+      ...(filter.search && { stem: { contains: filter.search } }),
+      ...(filter.hasPassage !== undefined && {
+        passageId: filter.hasPassage ? { not: null } : null,
+      }),
+    },
+    include: { category: true, source: true, passage: true },
     take: filter.limit ?? 200,
     orderBy: { sourceLocalId: "asc" },
   });
@@ -56,7 +51,7 @@ export async function fetchQuestions(filter: QuestionFilter = {}) {
 export async function fetchQuestionById(id: string) {
   const q = await db.question.findUnique({
     where: { id },
-    include: { category: true, source: true },
+    include: { category: true, source: true, passage: true },
   });
   if (!q) return null;
   return toQuestionDTO(q);
@@ -65,7 +60,7 @@ export async function fetchQuestionById(id: string) {
 export async function fetchQuestionsByIds(ids: string[]) {
   const qs = await db.question.findMany({
     where: { id: { in: ids } },
-    include: { category: true, source: true },
+    include: { category: true, source: true, passage: true },
   });
   return qs.map(toQuestionDTO);
 }

@@ -107,20 +107,124 @@ export function updateStreak(
   prevStreak: number,
   prevLastActive: string | null,
   shields: number
-): { streak: number; shields: number; shieldConsumed: boolean } {
+): { streak: number; shields: number; shieldConsumed: boolean; shieldEarned: boolean } {
   const today = todayKey();
   if (prevLastActive === today) {
-    return { streak: prevStreak, shields, shieldConsumed: false };
+    return { streak: prevStreak, shields, shieldConsumed: false, shieldEarned: false };
   }
   const yesterday = dayKeyOffset(1);
   if (prevLastActive === yesterday) {
-    return { streak: prevStreak + 1, shields, shieldConsumed: false };
+    const newStreak = prevStreak + 1;
+    // Earn a shield every 7-day streak milestone (7, 14, 21, …)
+    const shieldEarned = newStreak % 7 === 0 && prevStreak % 7 !== 0;
+    const newShields = shields + (shieldEarned ? 1 : 0);
+    return { streak: newStreak, shields: newShields, shieldConsumed: false, shieldEarned };
   }
   // Gap detected
   if (shields > 0 && prevStreak > 0) {
-    return { streak: prevStreak, shields: shields - 1, shieldConsumed: true };
+    return { streak: prevStreak, shields: shields - 1, shieldConsumed: true, shieldEarned: false };
   }
-  return { streak: 1, shields, shieldConsumed: false };
+  return { streak: 1, shields, shieldConsumed: false, shieldEarned: false };
+}
+
+// ---------------------------------------------------------------------------
+// Milestones
+// ---------------------------------------------------------------------------
+
+/** XP thresholds that trigger celebratory toasts when crossed. */
+export const XP_MILESTONES = [
+  { xp: 100, label: "نقطة خبرة", emoji: "🌟", name: "١٠٠ نقطة خبرة" },
+  { xp: 500, label: "نقطة خبرة", emoji: "⭐", name: "٥٠٠ نقطة خبرة" },
+  { xp: 1000, label: "نقطة", emoji: "💫", name: "١٠٠٠ نقطة خبرة" },
+  { xp: 2000, label: "نقطة", emoji: "🎯", name: "٢٠٠٠ نقطة خبرة" },
+  { xp: 5000, label: "نقطة", emoji: "🏆", name: "٥٠٠٠ نقطة خبرة" },
+  { xp: 10000, label: "نقطة", emoji: "👑", name: "١٠٠٠٠ نقطة خبرة" },
+  { xp: 25000, label: "نقطة", emoji: "💎", name: "٢٥٠٠٠ نقطة خبرة" },
+  { xp: 50000, label: "نقطة", emoji: "🔥", name: "٥٠٠٠٠ نقطة خبرة" },
+];
+
+/** Streak thresholds that trigger celebrations. */
+export const STREAK_MILESTONES = [
+  { days: 7, emoji: "🔥", name: "أسبوع متواصل" },
+  { days: 14, emoji: "💪", name: "١٤ يوم متواصل" },
+  { days: 21, emoji: "⭐", name: "٢١ يوم متواصل" },
+  { days: 30, emoji: "👑", name: "٣٠ يوم متواصل — شهر كامل!" },
+  { days: 60, emoji: "💎", name: "٦٠ يوم متواصل — شهرين!" },
+  { days: 100, emoji: "🏆", name: "١٠٠ يوم متواصل — إنجاز أسطوري!" },
+];
+
+/** Check which XP milestones were crossed. */
+export function getCrossedXpMilestones(
+  oldXp: number,
+  newXp: number
+): Array<{ xp: number; name: string; emoji: string }> {
+  return XP_MILESTONES.filter(
+    (m) => oldXp < m.xp && newXp >= m.xp
+  );
+}
+
+/** Check if a streak milestone was crossed. */
+export function getCrossedStreakMilestone(
+  oldStreak: number,
+  newStreak: number
+): { days: number; name: string; emoji: string } | null {
+  return (
+    STREAK_MILESTONES.find(
+      (m) => oldStreak < m.days && newStreak >= m.days
+    ) ?? null
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Weekly Challenge
+// ---------------------------------------------------------------------------
+
+export interface WeeklyChallenge {
+  slug: string;
+  descriptionAr: string;
+  target: number;
+  metric: "attempts" | "correct" | "xp";
+  rewardLabel: string;
+}
+
+const WEEKLY_CHALLENGE_POOL: WeeklyChallenge[] = [
+  { slug: "w50_attempts", descriptionAr: "حُل ٥٠ سؤالًا هذا الأسبوع", target: 50, metric: "attempts", rewardLabel: "+١٠٠ XP" },
+  { slug: "w30_correct", descriptionAr: "أجب ٣٠ إجابة صحيحة", target: 30, metric: "correct", rewardLabel: "+١٢٠ XP" },
+  { slug: "w100_xp", descriptionAr: "اجمع ١٠٠ نقطة خبرة", target: 100, metric: "xp", rewardLabel: "+١٥٠ XP" },
+  { slug: "w80_attempts", descriptionAr: "حُل ٨٠ سؤالًا", target: 80, metric: "attempts", rewardLabel: "+٢٠٠ XP + درع 🔥" },
+  { slug: "w50_correct", descriptionAr: "٥٠ إجابة صحيحة", target: 50, metric: "correct", rewardLabel: "+٢٥٠ XP 🎯" },
+];
+
+/**
+ * Get the weekly challenge for a given ISO week.
+ * Deterministic — same challenge for the entire week.
+ */
+export function weeklyChallengeForDate(dateStr: string): WeeklyChallenge {
+  let sum = 0;
+  for (let i = 0; i < dateStr.length; i++) sum += dateStr.charCodeAt(i);
+  return WEEKLY_CHALLENGE_POOL[sum % WEEKLY_CHALLENGE_POOL.length];
+}
+
+/**
+ * Compute the start of the current ISO week (Monday).
+ * Returns "YYYY-MM-DD".
+ */
+export function weekStartKey(d = new Date()): string {
+  const day = d.getDay();
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1); // Monday
+  const monday = new Date(d);
+  monday.setDate(diff);
+  return todayKey(monday);
+}
+
+/**
+ * Compute the end of the current ISO week (Sunday).
+ * Returns "YYYY-MM-DD".
+ */
+export function weekEndKey(d = new Date()): string {
+  const monday = new Date(weekStartKey(d));
+  monday.setDate(monday.getDate() + 6);
+  return todayKey(monday);
 }
 
 // ---------------------------------------------------------------------------

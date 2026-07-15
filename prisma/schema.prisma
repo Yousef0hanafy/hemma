@@ -19,15 +19,16 @@ datasource db {
 
 /// A single imported JSON file (e.g. question_set_1.json)
 model Source {
-  id            String     @id @default(cuid())
-  slug          String     @unique
-  title         String
-  date          String?
-  importedAt    DateTime   @default(now())
-  questionCount Int        @default(0)
-  metadata      String     @default("{}")
-  questions     Question[]
-  passages      Passage[]
+  id               String            @id @default(cuid())
+  slug             String            @unique
+  title            String
+  date             String?
+  importedAt       DateTime          @default(now())
+  questionCount    Int               @default(0)
+  metadata         String            @default("{}")
+  questions        Question[]
+  passages         Passage[]
+  aiprocessingLogs AIProcessingLog[]
 
   @@map("sources")
 }
@@ -48,46 +49,53 @@ model Category {
 
 /// Optional reading passage for استيعاب المقروء questions
 model Passage {
-  id         String     @id @default(cuid())
-  sourceId   String
-  source     Source     @relation(fields: [sourceId], references: [id])
-  titleAr    String?
-  bodyAr     String
-  metadata   String     @default("{}")
-  questions  Question[]
+  id        String     @id @default(cuid())
+  sourceId  String
+  source    Source     @relation(fields: [sourceId], references: [id])
+  titleAr   String?
+  bodyAr    String
+  metadata  String     @default("{}")
+  questions Question[]
 
   @@map("passages")
 }
 
 /// Unified question model — identical schema across all sources
 model Question {
-  id            String     @id @default(cuid())
-  sourceId      String
-  source        Source     @relation(fields: [sourceId], references: [id])
-  categoryId    String
-  category      Category   @relation(fields: [categoryId], references: [id])
-  passageId     String?
-  passage       Passage?   @relation(fields: [passageId], references: [id])
-  sourceLocalId Int
-  type          String
-  stem          String
-  options       String     @default("{}")
-  correctKey    String
-  explanation   String?
-  studyTip      String?
-  difficulty    String     @default("medium")
-  tags          String     @default("[]")
-  citation      String?
-  metadata      String     @default("{}")
-  createdAt     DateTime   @default(now())
-  attempts      Attempt[]
-  favorites     Favorite[]
+  id               String            @id @default(cuid())
+  sourceId         String
+  source           Source            @relation(fields: [sourceId], references: [id])
+  categoryId       String
+  category         Category          @relation(fields: [categoryId], references: [id])
+  passageId        String?
+  passage          Passage?          @relation(fields: [passageId], references: [id])
+  sourceLocalId    Int
+  type             String
+  stem             String
+  options          String            @default("{}")
+  correctKey       String
+  explanation      String?
+  studyTip         String?
+  difficulty       String            @default("medium")
+  tags             String            @default("[]")
+  citation         String?
+  status           String            @default("published") // draft | review | approved | published | archived
+  aiProcessedAt    DateTime?
+  aiQualityScore   Float?
+  metadata         String            @default("{}")
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  attempts         Attempt[]
+  favorites        Favorite[]
+  reviews          ContentReview[]
+  reviewSchedules  ReviewSchedule[]
+  questionVersions QuestionVersion[]
 
   @@unique([sourceId, sourceLocalId])
   @@index([categoryId])
   @@index([sourceId])
   @@index([passageId])
-
+  @@index([status])
   @@map("questions")
 }
 
@@ -109,39 +117,37 @@ model Attempt {
   confidence  Int      @default(0)
   createdAt   DateTime @default(now())
 
+  @@index([userBucket])
   @@index([userBucket, questionId])
   @@index([sessionId])
   @@index([createdAt])
   @@index([userBucket, createdAt])
-
   @@map("attempts")
 }
 
 model Favorite {
-  id          String   @id @default(cuid())
-  userBucket  String   @default("default")
-  questionId  String
-  question    Question @relation(fields: [questionId], references: [id])
-  note        String?
-  createdAt   DateTime @default(now())
+  id         String   @id @default(cuid())
+  userBucket String   @default("default")
+  questionId String
+  question   Question @relation(fields: [questionId], references: [id])
+  note       String?
+  createdAt  DateTime @default(now())
 
   @@unique([userBucket, questionId])
-
   @@map("favorites")
 }
 
 model DailyActivity {
-  id           String   @id @default(cuid())
-  userBucket   String   @default("default")
-  date         String
-  attempts     Int      @default(0)
-  correct      Int      @default(0)
-  xpEarned     Int      @default(0)
-  categoryStats String  @default("{}")
+  id            String @id @default(cuid())
+  userBucket    String @default("default")
+  date          String
+  attempts      Int    @default(0)
+  correct       Int    @default(0)
+  xpEarned      Int    @default(0)
+  categoryStats String @default("{}")
 
   @@unique([userBucket, date])
   @@index([userBucket])
-
   @@map("daily_activities")
 }
 
@@ -163,14 +169,236 @@ model UserProfile {
 }
 
 model Achievement {
-  id            String   @id @default(cuid())
-  slug          String   @unique
+  id            String @id @default(cuid())
+  slug          String @unique
   nameAr        String
   descriptionAr String
   iconAr        String
-  xpReward      Int      @default(0)
-  threshold     Int      @default(0)
+  xpReward      Int    @default(0)
+  threshold     Int    @default(0)
   category      String
 
   @@map("achievements")
+}
+
+// ---------------------------------------------------------------------
+// EXAM SESSION DATA — stores per-session questionIds and selections
+// so past exams can be re-viewed with full per-question breakdown.
+// ---------------------------------------------------------------------
+
+model ExamSessionData {
+  id                String   @id @default(cuid())
+  sessionId         String   @unique
+  userBucket        String
+  questionIds       String // JSON array of question IDs
+  selections        String // JSON object: questionId → selected key or null
+  durationSec       Int      @default(0)
+  actualDurationSec Int?     @default(0)
+  createdAt         DateTime @default(now())
+
+  @@index([userBucket, sessionId])
+  @@map("exam_session_data")
+}
+
+// ---------------------------------------------------------------------
+// SPACED REPETITION — SM-2 review schedules
+// ---------------------------------------------------------------------
+
+model ReviewSchedule {
+  id             String    @id @default(cuid())
+  userBucket     String
+  questionId     String
+  question       Question  @relation(fields: [questionId], references: [id])
+  easiness       Float     @default(2.5)
+  interval       Int       @default(0) // days until next review
+  repetitions    Int       @default(0) // consecutive correct answers
+  nextReviewAt   DateTime  @default(now())
+  lastReviewedAt DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@unique([userBucket, questionId])
+  @@index([userBucket, nextReviewAt])
+  @@map("review_schedules")
+}
+
+// ---------------------------------------------------------------------
+// CONTENT STUDIO MODELS — lifecycle tracking, reviews, AI logs
+// ---------------------------------------------------------------------
+
+/// Tracks the review lifecycle of a question (who reviewed, when, result)
+model ContentReview {
+  id         String   @id @default(cuid())
+  questionId String
+  question   Question @relation(fields: [questionId], references: [id])
+  reviewerId String?
+  reviewer   User?    @relation(fields: [reviewerId], references: [id])
+  action     String // approved | rejected | changes_requested
+  notes      String?
+  createdAt  DateTime @default(now())
+
+  @@index([questionId])
+  @@index([reviewerId])
+  @@map("content_reviews")
+}
+
+/// Tracks AI processing operations on sources and questions
+model AIProcessingLog {
+  id          String    @id @default(cuid())
+  sourceId    String?
+  questionId  String?
+  source      Source?   @relation(fields: [sourceId], references: [id])
+  operation   String // parse | categorize | estimate_difficulty | generate_explanation | quality_check
+  status      String // pending | processing | completed | failed
+  result      String? // JSON result summary
+  error       String?
+  durationMs  Int?
+  createdAt   DateTime  @default(now())
+  completedAt DateTime?
+
+  @@index([sourceId])
+  @@index([status])
+  @@map("ai_processing_logs")
+}
+
+// ---------------------------------------------------------------------
+// LEARNING GOALS — user-defined daily targets
+// ---------------------------------------------------------------------
+
+/// Per-user daily learning goals (attempts, correct, xp)
+model LearningGoal {
+  id         String   @id @default(cuid())
+  userBucket String
+  type       String // "attempts" | "correct" | "xp"
+  target     Int // daily target quantity
+  label      String? // optional custom label
+  enabled    Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([userBucket, type])
+  @@index([userBucket])
+  @@map("learning_goals")
+}
+
+// ---------------------------------------------------------------------
+// SYSTEM SETTINGS — key-value store for studio configuration
+// ---------------------------------------------------------------------
+
+/// Application-wide settings (publishing defaults, AI config, etc.)
+model StudioSetting {
+  key   String @id
+  value String
+
+  @@map("studio_settings")
+}
+
+// ---------------------------------------------------------------------
+// VERSION HISTORY — tracks field-level changes to questions
+// ---------------------------------------------------------------------
+
+/// Tracks individual field changes to questions for version history
+model QuestionVersion {
+  id         String   @id @default(cuid())
+  questionId String
+  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  field      String // which field changed (stem, explanation, difficulty, etc.)
+  oldValue   String?
+  newValue   String?
+  changedBy  String?
+  createdAt  DateTime @default(now())
+
+  @@index([questionId])
+  @@map("question_versions")
+}
+
+// ---------------------------------------------------------------------
+// CHAT SESSIONS — persisted conversations for the AI Q&A Assistant
+// ---------------------------------------------------------------------
+
+/// A persisted chat session for the AI Q&A Assistant
+model ChatSession {
+  id        String        @id @default(cuid())
+  userId    String
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String        @default("محادثة جديدة")
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+  messages  ChatMessage[]
+
+  @@index([userId])
+  @@index([userId, updatedAt])
+  @@map("chat_sessions")
+}
+
+/// Individual messages within a chat session
+model ChatMessage {
+  id        String      @id @default(cuid())
+  sessionId String
+  session   ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  role      String // "user" | "assistant"
+  content   String
+  createdAt DateTime    @default(now())
+
+  @@index([sessionId])
+  @@map("chat_messages")
+}
+
+// ---------------------------------------------------------------------
+// NEXT AUTH MODELS — required by @next-auth/prisma-adapter
+// ---------------------------------------------------------------------
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model User {
+  id            String          @id @default(cuid())
+  name          String?
+  email         String?         @unique
+  emailVerified DateTime?
+  image         String?
+  password      String? // hashed password for credential users (null for Google-only users)
+  role          String          @default("student") // student | admin | editor | reviewer
+  accounts      Account[]
+  sessions      Session[]
+  reviews       ContentReview[]
+  chatSessions  ChatSession[]
+
+  @@map("users")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
 }

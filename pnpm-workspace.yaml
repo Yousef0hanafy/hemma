@@ -1,0 +1,10 @@
+allowBuilds:
+  '@parcel/watcher': false
+  '@prisma/client': true
+  '@prisma/engines': false
+  '@swc/core': false
+  es5-ext: false
+  esbuild: true
+  prisma: false
+  sharp: false
+  unrs-resolver: false

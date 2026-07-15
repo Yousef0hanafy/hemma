@@ -2,7 +2,8 @@
 
 import { useViewStore, ViewKey } from "@/lib/store/view-store";
 import { cn } from "@/lib/utils";
-import { Home, BookOpen, Timer, RefreshCw, BarChart3, Search, Trophy } from "lucide-react";
+import { useDueReviewCount } from "@/lib/hooks/use-data";
+import { Home, BookOpen, Timer, RefreshCw, BarChart3, Search, Trophy, Award, Bot } from "lucide-react";
 
 interface NavItem {
   key: string;
@@ -58,10 +59,27 @@ const NAV_ITEMS: NavItem[] = [
     view: { kind: "search" },
     matchView: (v) => v.kind === "search",
   },
+  {
+    key: "leaderboard",
+    labelAr: "المتصدرون",
+    icon: Award,
+    view: { kind: "leaderboard" },
+    matchView: (v) => v.kind === "leaderboard",
+  },
+  {
+    key: "study_buddy",
+    labelAr: "المساعد الذكي",
+    icon: Bot,
+    view: { kind: "study_buddy" },
+    matchView: (v) => v.kind === "study_buddy",
+  },
 ];
 
 export function AppNav() {
   const { view, setView } = useViewStore();
+  const { data: dueCount } = useDueReviewCount();
+
+  const badge = dueCount && dueCount > 0 ? dueCount : null;
 
   return (
     <>
@@ -85,7 +103,12 @@ export function AppNav() {
               )}
             >
               <Icon className="h-4 w-4 shrink-0" />
-              <span>{item.labelAr}</span>
+              <span className="flex-1 text-right">{item.labelAr}</span>
+              {item.key === "revision" && badge !== null && (
+                <span className="inline-flex items-center justify-center h-5 min-w-[20px] rounded-full bg-rose-500 text-[10px] font-bold text-white px-1.5 tabular-nums">
+                  {badge}
+                </span>
+              )}
             </button>
           );
         })}
@@ -119,7 +142,7 @@ export function AppNav() {
                 key={item.key}
                 onClick={() => setView(item.view)}
                 className={cn(
-                  "flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-lg text-[10px] font-medium transition-colors min-w-[52px]",
+                  "relative flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-lg text-[10px] font-medium transition-colors min-w-[52px]",
                   active
                     ? "text-primary"
                     : "text-muted-foreground hover:text-foreground"
@@ -128,6 +151,11 @@ export function AppNav() {
               >
                 <Icon className={cn("h-5 w-5", active && "scale-110")} />
                 <span>{item.labelAr}</span>
+                {item.key === "revision" && badge !== null && (
+                  <span className="absolute -top-1 -right-1 inline-flex items-center justify-center h-4 min-w-[14px] rounded-full bg-rose-500 text-[8px] font-bold text-white px-1 tabular-nums">
+                    {badge > 99 ? "99+" : badge}
+                  </span>
+                )}
               </button>
             );
           })}

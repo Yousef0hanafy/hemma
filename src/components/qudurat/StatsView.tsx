@@ -7,6 +7,8 @@ import {
   useDailyActivity,
   useUserProfile,
   useRecentAttempts,
+  useExamHistory,
+  useSpeedStats,
 } from "@/lib/hooks/use-data";
 import { MasteryRing } from "./MasteryRing";
 import {
@@ -14,6 +16,8 @@ import {
   formatPercent,
   categoryMeta,
   relativeTimeAr,
+  getStatCardColor,
+  getColorPalette,
 } from "@/lib/content/ui-helpers";
 import {
   levelProgress,
@@ -31,14 +35,23 @@ import {
   Trophy,
   Check,
   X,
+  LineChartIcon,
+  Timer,
+  ChevronLeft,
 } from "lucide-react";
+import { FullScreenLoader } from "./LoadingStates";
 
 export function StatsView() {
   const { setView } = useViewStore();
-  const { data: mastery } = useCategoryMastery();
+  const { data: mastery, loading: masteryLoading } = useCategoryMastery();
   const { data: activity } = useDailyActivity(84);
-  const { data: profile } = useUserProfile();
+  const { data: profile, loading: profileLoading } = useUserProfile();
   const { data: recent } = useRecentAttempts(15);
+  const { data: speedStats } = useSpeedStats();
+
+  if (profileLoading || masteryLoading) {
+    return <FullScreenLoader label="جارٍ تحميل الإحصاءات…" />;
+  }
 
   const lp = profile ? levelProgress(profile.totalXp) : null;
 
@@ -152,6 +165,9 @@ export function StatsView() {
         </div>
       </motion.section>
 
+      {/* Speed stats */}
+      <SpeedStatsSection speedStats={speedStats ?? []} />
+
       {/* Category mastery breakdown */}
       <motion.section
         initial={{ opacity: 0, y: 12 }}
@@ -230,6 +246,9 @@ export function StatsView() {
         </motion.section>
       )}
 
+      {/* Exam history link */}
+      <ExamHistoryCard />
+
       {/* Recent attempts */}
       {recent && recent.length > 0 && (
         <motion.section
@@ -283,19 +302,121 @@ function StatCard({
   value: string;
   color: string;
 }) {
-  const colors: Record<string, string> = {
-    emerald: "text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/30",
-    amber: "text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/30",
-    violet: "text-violet-700 dark:text-violet-300 bg-violet-50 dark:bg-violet-950/30",
-    rose: "text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/30",
-  };
   return (
     <div className="rounded-2xl bg-card border border-border p-4">
-      <div className={cn("inline-flex h-8 w-8 rounded-lg items-center justify-center mb-2", colors[color])}>
+      <div className={cn("inline-flex h-8 w-8 rounded-lg items-center justify-center mb-2", getStatCardColor(color))}>
         {icon}
       </div>
       <div className="text-2xl font-bold tabular-nums">{value}</div>
       <div className="text-xs text-muted-foreground mt-0.5">{label}</div>
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+
+function SpeedStatsSection({ speedStats }: { speedStats: SpeedStatDTO[] }) {
+  const withAttempts = speedStats.filter((s) => s.attempted > 0);
+  if (withAttempts.length === 0) return null;
+
+  const maxTime = Math.max(...withAttempts.map((s) => s.avgTimeSec), 1);
+
+  return (
+    <motion.section
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.08 }}
+      className="rounded-2xl bg-card border border-border p-5"
+    >
+      <div className="flex items-center gap-2 mb-4">
+        <Timer className="h-4 w-4 text-muted-foreground" />
+        <h2 className="font-semibold">متوسط سرعة الإجابة</h2>
+      </div>
+      <div className="space-y-3">
+        {withAttempts.map((s) => {
+          const colorTheme = s.colorTheme ?? "emerald";
+          const palette = getColorPalette(colorTheme);
+          const barWidth = maxTime > 0 ? (s.avgTimeSec / maxTime) * 100 : 0;
+
+          // Speed tier: ≤15s fast, ≤30s moderate, >30s slow
+          const speedTier =
+            s.avgTimeSec <= 15 ? "emerald" :
+            s.avgTimeSec <= 30 ? "amber" :
+            "rose";
+          const tierPalette = getColorPalette(speedTier);
+
+          return (
+            <div key={s.categorySlug} className="flex items-center gap-3">
+              <div className="w-28 sm:w-32 text-sm font-medium truncate">{s.categoryNameAr}</div>
+              <div className="flex-1">
+                <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
+                  <span>{toArabicDigits(s.attempted)} محاولة</span>
+                  <span
+                    className={cn("tabular-nums font-semibold", tierPalette.text)}
+                  >
+                    {toArabicDigits(s.avgTimeSec)} ث
+                  </span>
+                </div>
+                <div className="h-2 rounded-full bg-muted overflow-hidden" dir="ltr">
+                  <motion.div
+                    className="h-full rounded-full"
+                    initial={{ width: 0 }}
+                    animate={{ width: `${barWidth}%` }}
+                    transition={{ duration: 0.6, ease: "easeOut" }}
+                    style={{ backgroundColor: palette.hex.stroke }}
+                  />
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </motion.section>
+  );
+}
+
+// ---------------------------------------------------------------------------
+
+function ExamHistoryCard() {
+  const { setView } = useViewStore();
+  const { data: sessions } = useExamHistory();
+
+  if (!sessions || sessions.length === 0) return null;
+
+  const avg = sessions.slice(0, 5).reduce((s, sess) => s + sess.scorePercent, 0) / Math.min(5, sessions.length);
+  const trend = sessions.length >= 2
+    ? sessions[0].scorePercent - sessions[sessions.length - 1].scorePercent
+    : 0;
+
+  return (
+    <motion.button
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.18 }}
+      onClick={() => setView({ kind: "exam_history" })}
+      className="w-full rounded-2xl bg-gradient-to-bl from-violet-50 to-indigo-50 dark:from-violet-950/30 dark:to-indigo-950/20 border border-violet-200 dark:border-violet-900 p-5 text-right hover:shadow-sm transition-all"
+    >
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="h-10 w-10 rounded-xl bg-violet-500 text-white grid place-items-center">
+            <LineChartIcon className="h-5 w-5" />
+          </div>
+          <div className="text-right">
+            <h3 className="font-semibold text-sm">سجل الاختبارات</h3>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {toArabicDigits(sessions.length)} اختبار · متوسط {formatPercent(avg)}
+              {trend !== 0 && (
+                <span className={cn("mr-1", trend > 0 ? "text-emerald-600" : "text-rose-600")}>
+                  ({trend > 0 ? "↑" : "↓"}{toArabicDigits(Math.abs(Math.round(trend)))}) 
+                </span>
+              )}
+            </p>
+          </div>
+        </div>
+        <ChevronLeft className="h-5 w-5 text-violet-500 shrink-0" />
+      </div>
+    </motion.button>
   );
 }

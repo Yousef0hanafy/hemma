@@ -4,8 +4,9 @@ import { useMemo } from "react";
 import { motion } from "framer-motion";
 import { useViewStore } from "@/lib/store/view-store";
 import { useQuestionsByIds } from "@/lib/hooks/use-data";
-import { categoryMeta, toArabicDigits, formatPercent, DIFFICULTY_META } from "@/lib/content/ui-helpers";
+import { categoryMeta, toArabicDigits, formatPercent, DIFFICULTY_META, getColorHex, formatDuration } from "@/lib/content/ui-helpers";
 import { MasteryRing } from "./MasteryRing";
+import { AnimatedChip } from "./shared/AnimatedChip";
 import { cn } from "@/lib/utils";
 import {
   Trophy,
@@ -17,20 +18,46 @@ import {
   RefreshCw,
   Home,
   Lightbulb,
+  Zap,
+  Gauge,
+  Timer,
+  Share2,
+  BookOpen,
 } from "lucide-react";
+import { PassageView } from "./shared/PassageView";
 import { FullScreenLoader } from "./LoadingStates";
+import { ExamDeepReviewView } from "./ExamDeepReviewView";
+import { xpForExamSession } from "@/lib/engine/gamification";
+import { useShareAsImage } from "@/lib/hooks/use-share-image";
+import { useState } from "react";
 
 export function ExamReportView({
   questionIds,
   selections,
   durationSec,
+  actualDurationSec,
 }: {
   questionIds: string[];
   selections: Record<string, string | null>;
   durationSec: number;
+  actualDurationSec?: number;
 }) {
   const { setView } = useViewStore();
   const { data: questions } = useQuestionsByIds(questionIds);
+  const { shareRef, handleShare, isSharing } = useShareAsImage("نتيجة-الاختبار.png");
+  const [showDeepReview, setShowDeepReview] = useState(false);
+
+  // Deep review mode — show one question at a time
+  if (showDeepReview) {
+    return (
+      <ExamDeepReviewView
+        questionIds={questionIds}
+        selections={selections}
+        actualDurationSec={actualDurationSec}
+        onBack={() => setShowDeepReview(false)}
+      />
+    );
+  }
 
   const stats = useMemo(() => {
     if (!questions) return null;
@@ -38,6 +65,7 @@ export function ExamReportView({
     let wrong = 0;
     let skipped = 0;
     const byCategory: Record<string, { total: number; correct: number; nameAr: string }> = {};
+    const byDifficulty: Record<string, { total: number; correct: number }> = {};
     for (const q of questions) {
       const sel = selections[q.id];
       const cat = byCategory[q.categorySlug] ?? { total: 0, correct: 0, nameAr: q.categoryNameAr };
@@ -46,6 +74,11 @@ export function ExamReportView({
       else if (sel === q.correctKey) { correct++; cat.correct++; }
       else wrong++;
       byCategory[q.categorySlug] = cat;
+
+      const d = q.difficulty;
+      if (!byDifficulty[d]) byDifficulty[d] = { total: 0, correct: 0 };
+      byDifficulty[d].total++;
+      if (sel && sel === q.correctKey) byDifficulty[d].correct++;
     }
     const total = questions.length;
     const scorePercent = total > 0 ? (correct / total) * 100 : 0;
@@ -55,9 +88,16 @@ export function ExamReportView({
       wrong,
       skipped,
       scorePercent,
+      xpEarned: xpForExamSession(scorePercent),
       byCategory: Object.entries(byCategory).map(([slug, s]) => ({
         slug,
         ...s,
+        percent: s.total > 0 ? (s.correct / s.total) * 100 : 0,
+      })),
+      byDifficulty: Object.entries(byDifficulty).map(([difficulty, s]) => ({
+        difficulty,
+        total: s.total,
+        correct: s.correct,
         percent: s.total > 0 ? (s.correct / s.total) * 100 : 0,
       })),
     };
@@ -72,7 +112,8 @@ export function ExamReportView({
 
   return (
     <div className="max-w-4xl mx-auto space-y-6 pb-32 lg:pb-12">
-      {/* Hero score */}
+      {/* Hero score — wrapped for screenshot capture */}
+      <div ref={shareRef}>
       <motion.section
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
@@ -109,42 +150,113 @@ export function ExamReportView({
           </div>
 
           <div className="grid grid-cols-3 gap-3 mt-6 max-w-md mx-auto">
-            <StatChip
+            <AnimatedChip
+              variant="stat"
+              color="emerald"
               icon={<Check className="h-4 w-4" />}
               label="صحيحة"
               value={stats.correct}
-              color="emerald"
+              pulseKey={stats.correct}
             />
-            <StatChip
+            <AnimatedChip
+              variant="stat"
+              color="rose"
               icon={<X className="h-4 w-4" />}
               label="خاطئة"
               value={stats.wrong}
-              color="rose"
+              pulseKey={stats.wrong}
             />
-            <StatChip
+            <AnimatedChip
+              variant="stat"
+              color="amber"
               icon={<ArrowRight className="h-4 w-4" />}
               label="متروكة"
               value={stats.skipped}
-              color="amber"
+              pulseKey={stats.skipped}
             />
           </div>
 
-          {durationSec > 0 && (
-            <div className="text-emerald-100/80 text-xs mt-4 flex items-center justify-center gap-1">
-              <Clock className="h-3.5 w-3.5" />
+          {/* XP and time row */}
+          <div className="flex items-center justify-center gap-4 mt-4 text-emerald-100/80 text-xs">
+            <div className="flex items-center gap-1">
+              <Zap className="h-3.5 w-3.5" />
               <span>
-                زمن الاختبار: {toArabicDigits(Math.round(durationSec / 60))} دقيقة
+                +{toArabicDigits(stats.xpEarned)} نقطة خبرة
               </span>
             </div>
-          )}
+            {(actualDurationSec ?? 0) > 0 && (
+              <div className="flex items-center gap-1">
+                <Timer className="h-3.5 w-3.5" />
+                <span>
+                  {formatDuration(actualDurationSec!)}
+                  {durationSec > 0 && (
+                    <span className="text-emerald-100/50">
+                      {" "}/ {toArabicDigits(Math.round(durationSec / 60))} د
+                    </span>
+                  )}
+                </span>
+              </div>
+            )}
+            {!actualDurationSec && durationSec > 0 && (
+              <div className="flex items-center gap-1">
+                <Clock className="h-3.5 w-3.5" />
+                <span>
+                  {toArabicDigits(Math.round(durationSec / 60))} دقيقة
+                </span>
+              </div>
+            )}
+          </div>
         </div>
       </motion.section>
+      </div>
+
+      {/* Summary row: XP + time + difficulty */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          className="rounded-2xl bg-card border border-border p-4 text-center"
+        >
+          <div className="inline-flex h-8 w-8 rounded-lg bg-amber-100 dark:bg-amber-950/40 items-center justify-center mx-auto mb-1.5">
+            <Zap className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+          </div>
+          <div className="text-lg font-bold tabular-nums">{toArabicDigits(stats.xpEarned)}</div>
+          <div className="text-[10px] text-muted-foreground">نقاط الخبرة</div>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.12 }}
+          className="rounded-2xl bg-card border border-border p-4 text-center"
+        >
+          <div className="inline-flex h-8 w-8 rounded-lg bg-violet-100 dark:bg-violet-950/40 items-center justify-center mx-auto mb-1.5">
+            <Gauge className="h-4 w-4 text-violet-600 dark:text-violet-400" />
+          </div>
+          <div className="text-lg font-bold tabular-nums">{formatPercent(stats.scorePercent)}</div>
+          <div className="text-[10px] text-muted-foreground">نسبة النجاح</div>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.14 }}
+          className="rounded-2xl bg-card border border-border p-4 text-center"
+        >
+          <div className="inline-flex h-8 w-8 rounded-lg bg-sky-100 dark:bg-sky-950/40 items-center justify-center mx-auto mb-1.5">
+            <Timer className="h-4 w-4 text-sky-600 dark:text-sky-400" />
+          </div>
+          <div className="text-lg font-bold tabular-nums">{actualDurationSec ? formatDuration(actualDurationSec) : toArabicDigits(stats.total)}</div>
+          <div className="text-[10px] text-muted-foreground">{actualDurationSec ? "الزمن الفعلي" : "عدد الأسئلة"}</div>
+        </motion.div>
+      </div>
 
       {/* Per-category breakdown */}
       <motion.section
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.1 }}
+        transition={{ delay: 0.16 }}
         className="rounded-2xl bg-card border border-border p-5"
       >
         <h2 className="font-semibold mb-4">الأداء حسب الفئة</h2>
@@ -165,11 +277,11 @@ export function ExamReportView({
                   </div>
                   <div className="h-1.5 rounded-full bg-muted overflow-hidden">
                     <motion.div
-                      className={cn("h-full", `bg-${meta.color}-500`)}
+                      className="h-full"
                       initial={{ width: 0 }}
                       animate={{ width: `${c.percent}%` }}
                       transition={{ duration: 0.6 }}
-                      style={{ backgroundColor: meta.color === "emerald" ? "#10b981" : meta.color === "amber" ? "#f59e0b" : meta.color === "rose" ? "#f43f5e" : meta.color === "violet" ? "#8b5cf6" : meta.color === "cyan" ? "#06b6d4" : "#64748b" }}
+                      style={{ backgroundColor: getColorHex(meta.color).stroke }}
                     />
                   </div>
                 </div>
@@ -178,6 +290,46 @@ export function ExamReportView({
           })}
         </div>
       </motion.section>
+
+      {/* Difficulty breakdown */}
+      {stats.byDifficulty.length > 0 && (
+        <motion.section
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.18 }}
+          className="rounded-2xl bg-card border border-border p-5"
+        >
+          <h2 className="font-semibold mb-4">توزيع الصعوبة</h2>
+          <div className="grid grid-cols-3 gap-3">
+            {stats.byDifficulty.map((d) => {
+              const dMeta = DIFFICULTY_META[d.difficulty] ?? { labelAr: d.difficulty, className: "" };
+              return (
+                <div key={d.difficulty} className="rounded-xl bg-muted/50 p-3.5 text-center">
+                  <div className="text-sm font-semibold mb-2">{dMeta.labelAr}</div>
+                  <div className="text-lg font-bold tabular-nums mb-1">
+                    {toArabicDigits(d.correct)}/{toArabicDigits(d.total)}
+                  </div>
+                  <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                    <motion.div
+                      className="h-full rounded-full"
+                      style={{
+                        width: `${d.percent}%`,
+                        backgroundColor:
+                          d.difficulty === "easy" ? "#059669" :
+                          d.difficulty === "medium" ? "#d97706" : "#e11d48",
+                      }}
+                      initial={{ width: 0 }}
+                      animate={{ width: `${d.percent}%` }}
+                      transition={{ duration: 0.6, delay: 0.3 }}
+                    />
+                  </div>
+                  <div className="text-[10px] text-muted-foreground mt-1.5">{formatPercent(d.percent)}</div>
+                </div>
+              );
+            })}
+          </div>
+        </motion.section>
+      )}
 
       {/* Question-by-question review */}
       <motion.section
@@ -234,6 +386,13 @@ export function ExamReportView({
               </div>
               <p className="font-naskh text-sm leading-relaxed mb-3">{q.stem}</p>
 
+              {/* Passage (استيعاب المقروء) */}
+              {q.passage && (
+                <div className="mb-3">
+                  <PassageView passage={q.passage} />
+                </div>
+              )}
+
               {/* Options compact */}
               <div className="space-y-1.5 mb-3">
                 {q.options.map((opt) => {
@@ -285,6 +444,21 @@ export function ExamReportView({
         className="flex flex-wrap justify-center gap-3"
       >
         <button
+          onClick={handleShare}
+          disabled={isSharing}
+          className="inline-flex items-center gap-2 rounded-full bg-emerald-600 text-white px-6 py-3 text-sm font-semibold hover:bg-emerald-700 transition-colors shadow-sm disabled:opacity-50"
+        >
+          <Share2 className="h-4 w-4" />
+          <span>{isSharing ? "جارٍ…" : "مشاركة النتيجة"}</span>
+        </button>
+        <button
+          onClick={() => setShowDeepReview(true)}
+          className="inline-flex items-center gap-2 rounded-full bg-violet-600 text-white px-6 py-3 text-sm font-semibold hover:bg-violet-700 transition-colors shadow-sm"
+        >
+          <BookOpen className="h-4 w-4" />
+          <span>مراجعة مفصلة</span>
+        </button>
+        <button
           onClick={() => setView({ kind: "exam_setup" })}
           className="inline-flex items-center gap-2 rounded-full bg-primary text-primary-foreground px-6 py-3 text-sm font-semibold hover:bg-primary/90"
         >
@@ -310,32 +484,4 @@ export function ExamReportView({
   );
 }
 
-// ---------------------------------------------------------------------------
 
-const STAT_COLOR: Record<string, string> = {
-  emerald: "bg-emerald-500/20 text-emerald-100",
-  rose:    "bg-rose-500/20 text-rose-100",
-  amber:   "bg-amber-500/20 text-amber-100",
-};
-
-function StatChip({
-  icon,
-  label,
-  value,
-  color,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: number;
-  color: string;
-}) {
-  return (
-    <div className={cn("rounded-xl p-3 text-center", STAT_COLOR[color])}>
-      <div className="flex items-center justify-center gap-1 mb-1 text-xs opacity-90">
-        {icon}
-        <span>{label}</span>
-      </div>
-      <div className="text-2xl font-bold tabular-nums">{toArabicDigits(value)}</div>
-    </div>
-  );
-}

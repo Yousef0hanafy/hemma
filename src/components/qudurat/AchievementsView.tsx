@@ -6,12 +6,21 @@ import { useAchievements, useUserProfile } from "@/lib/hooks/use-data";
 import { toArabicDigits, formatPercent } from "@/lib/content/ui-helpers";
 import { levelProgress } from "@/lib/engine/gamification";
 import { cn } from "@/lib/utils";
-import { ChevronLeft, Trophy, Lock, Star } from "lucide-react";
+import { ChevronLeft, Trophy, Lock, Star, Share2 } from "lucide-react";
+
+import { FullScreenLoader } from "./LoadingStates";
+import { useShareAsImage } from "@/lib/hooks/use-share-image";
 
 export function AchievementsView() {
   const { setView } = useViewStore();
-  const { data: achievements } = useAchievements();
-  const { data: profile } = useUserProfile();
+  const { data: achievements, loading: achievementsLoading } = useAchievements();
+  const { data: profile, loading: profileLoading } = useUserProfile();
+
+  if (profileLoading || achievementsLoading) {
+    return <FullScreenLoader label="جارٍ تحميل الإنجازات…" />;
+  }
+
+  const { shareRef, handleShare, isSharing } = useShareAsImage("إنجازات-همّة.png");
 
   const unlocked = new Set(profile?.unlockedAchievements ?? []);
   const lp = profile ? levelProgress(profile.totalXp) : null;
@@ -32,20 +41,32 @@ export function AchievementsView() {
 
   return (
     <div className="max-w-4xl mx-auto space-y-6 pb-32 lg:pb-12">
-      <div>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <button
+            onClick={() => setView({ kind: "stats" })}
+            className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mb-3"
+          >
+            <ChevronLeft className="h-4 w-4" />
+            <span>الإحصاءات</span>
+          </button>
+          <h1 className="font-display text-3xl font-bold mb-1">الإنجازات</h1>
+          <p className="text-muted-foreground text-sm">
+            كل إنجاز تفتحه يمنحك نقاط خبرة إضافية ويُوثّق رحلتك.
+          </p>
+        </div>
         <button
-          onClick={() => setView({ kind: "stats" })}
-          className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mb-3"
+          onClick={handleShare}
+          disabled={isSharing}
+          className="shrink-0 inline-flex items-center gap-1.5 rounded-full bg-amber-600 text-white px-4 py-2 text-xs font-semibold hover:bg-amber-700 transition-colors shadow-sm disabled:opacity-50 mt-9"
         >
-          <ChevronLeft className="h-4 w-4" />
-          <span>الإحصاءات</span>
+          <Share2 className="h-3.5 w-3.5" />
+          <span>{isSharing ? "جارٍ…" : "مشاركة الإنجازات"}</span>
         </button>
-        <h1 className="font-display text-3xl font-bold mb-1">الإنجازات</h1>
-        <p className="text-muted-foreground text-sm">
-          كل إنجاز تفتحه يمنحك نقاط خبرة إضافية ويُوثّق رحلتك.
-        </p>
       </div>
 
+      {/* Captured section: hero + stats */}
+      <div ref={shareRef} className="space-y-6">
       {/* Level progress hero */}
       {lp && profile && (
         <motion.div
@@ -108,6 +129,8 @@ export function AchievementsView() {
           <div className="text-xs text-muted-foreground mt-1">إجمالي النقاط</div>
         </div>
       </div>
+
+      </div> {/* closes shareRef */}
 
       {/* Achievements grid by category */}
       {Array.from(byCategory.entries()).map(([cat, items], catIdx) => (

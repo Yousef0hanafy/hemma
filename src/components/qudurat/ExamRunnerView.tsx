@@ -6,10 +6,8 @@ import { toast } from "sonner";
 import {
   ArrowRight,
   ArrowLeft,
-  Check,
   Flag,
   Clock,
-  AlertCircle,
   Grid3x3,
 } from "lucide-react";
 import { useViewStore } from "@/lib/store/view-store";
@@ -17,6 +15,7 @@ import {
   useQuestionsByIds,
   useRecordAttempt,
   useFinalizeExam,
+  useAutoRegisterMistake,
 } from "@/lib/hooks/use-data";
 import { categoryMeta, toArabicDigits, formatDuration, DIFFICULTY_META } from "@/lib/content/ui-helpers";
 import { cn } from "@/lib/utils";
@@ -31,6 +30,13 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { FullScreenLoader } from "./LoadingStates";
+import { OptionCard } from "./shared/OptionCard";
+import { PassageView } from "./shared/PassageView";
+import {
+  savePendingExam,
+  loadPendingExam,
+  clearPendingExam,
+} from "@/lib/exam-persistence";
 
 export function ExamRunnerView({
   sessionId,
@@ -45,11 +51,21 @@ export function ExamRunnerView({
   const { data: questions } = useQuestionsByIds(questionIds);
   const recordAttempt = useRecordAttempt();
   const finalizeExam = useFinalizeExam();
+  const autoRegisterMistake = useAutoRegisterMistake();
 
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [selections, setSelections] = useState<Record<string, ArabicLetter | null>>({});
+  // Restore persisted state if available (e.g. after session expiry)
+  const persisted = useRef(loadPendingExam());
+  const savedInternal = persisted.current?.view.kind === "exam_running"
+    ? persisted.current.internal
+    : null;
+
+  const examStartTime = useRef(Date.now());
+  const [currentIndex, setCurrentIndex] = useState(savedInternal?.currentIndex ?? 0);
+  const [selections, setSelections] = useState<Record<string, ArabicLetter | null>>(
+    savedInternal?.selections as Record<string, ArabicLetter | null> ?? {}
+  );
   const questionStartTimesRef = useRef<Record<string, number>>({});
-  const [timeLeft, setTimeLeft] = useState(durationSec);
+  const [timeLeft, setTimeLeft] = useState(savedInternal?.timeLeft ?? durationSec);
   const [showSubmitDialog, setShowSubmitDialog] = useState(false);
   const [showNavGrid, setShowNavGrid] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -57,6 +73,23 @@ export function ExamRunnerView({
   const current = questions?.[currentIndex];
   const total = questions?.length ?? 0;
   const answered = Object.values(selections).filter(Boolean).length;
+
+  // Clear persisted state once restored
+  useEffect(() => {
+    if (persisted.current) {
+      persisted.current = null;
+      clearPendingExam();
+    }
+  }, []);
+
+  // Persist internal state on every change (for session-expiry recovery)
+  useEffect(() => {
+    savePendingExam({
+      view: { kind: "exam_running", sessionId, questionIds, durationSec },
+      internal: { currentIndex, selections, timeLeft },
+      savedAt: Date.now(),
+    });
+  }, [currentIndex, selections, timeLeft, sessionId, questionIds, durationSec]);
 
   const handleSubmit = useCallback(async () => {
     if (submitting) return;
@@ -67,13 +100,15 @@ export function ExamRunnerView({
       for (const q of questions ?? []) {
         finalSelections[q.id] = selections[q.id] ?? null;
       }
-      await finalizeExam(sessionId, questionIds, finalSelections);
+      const actualDurationSec = Math.floor((Date.now() - examStartTime.current) / 1000);
+      await finalizeExam(sessionId, questionIds, finalSelections, actualDurationSec);
       setView({
         kind: "exam_report",
         sessionId,
         questionIds,
         selections: finalSelections,
         durationSec,
+        actualDurationSec,
       });
     } catch (e) {
       console.error(e);
@@ -121,12 +156,17 @@ export function ExamRunnerView({
             sessionId,
             timeMs,
           });
+
+          // Auto-register wrong answers for SRS revision
+          if (!isCorrect) {
+            autoRegisterMistake(current.id);
+          }
         } catch (e) {
           console.error(e);
         }
       }
     },
-    [current, selections, recordAttempt, sessionId]
+    [current, selections, recordAttempt, sessionId, autoRegisterMistake]
   );
 
   if (!questions || questions.length === 0) {
@@ -218,6 +258,11 @@ export function ExamRunnerView({
             </span>
           </div>
 
+          {/* Passage (استيعاب المقروء) */}
+          {current.passage && (
+            <PassageView passage={current.passage} />
+          )}
+
           {/* Stem */}
           <div className="rounded-2xl bg-card border border-border p-5 sm:p-6">
             <p className="question-stem text-foreground">{current.stem}</p>
@@ -225,35 +270,14 @@ export function ExamRunnerView({
 
           {/* Options — no feedback shown */}
           <div className="space-y-2.5">
-            {current.options.map((opt) => {
-              const isSelected = selections[current.id] === opt.key;
-              return (
-                <button
-                  key={opt.key}
-                  onClick={() => selectAnswer(opt.key)}
-                  className={cn(
-                    "w-full flex items-center gap-3 rounded-xl border-2 p-3.5 text-right transition-all",
-                    isSelected
-                      ? "border-primary bg-primary/5"
-                      : "border-border hover:border-primary/40 hover:bg-muted/50"
-                  )}
-                >
-                  <div
-                    className={cn(
-                      "h-9 w-9 shrink-0 rounded-lg grid place-items-center font-bold text-sm transition-colors",
-                      isSelected
-                        ? "bg-primary text-primary-foreground"
-                        : "bg-muted text-muted-foreground"
-                    )}
-                  >
-                    {isSelected ? <Check className="h-5 w-5" /> : opt.key}
-                  </div>
-                  <span className="font-naskh text-base leading-relaxed flex-1">
-                    {opt.text}
-                  </span>
-                </button>
-              );
-            })}
+            {current.options.map((opt) => (
+              <OptionCard
+                key={opt.key}
+                opt={opt}
+                selected={selections[current.id] === opt.key}
+                onClick={() => selectAnswer(opt.key)}
+              />
+            ))}
           </div>
         </motion.div>
       </AnimatePresence>

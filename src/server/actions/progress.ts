@@ -10,31 +10,41 @@ import {
   DailyActivityDTO,
   UserProfileDTO,
   AchievementDTO,
+  ExamSessionDTO,
+  ReviewScheduleDTO,
+  SpeedStatDTO,
   StudyMode,
   ArabicLetter,
 } from "@/lib/content/dto";
 import { toAttemptDTO } from "@/lib/content/dto";
 import {
   computeMastery,
+  getCrossedXpMilestones,
+  getCrossedStreakMilestone,
   levelForXp,
   questForDate,
   todayKey,
   updateStreak,
+  weekStartKey,
+  weeklyChallengeForDate,
   xpForCorrect,
   xpForExamSession,
 } from "@/lib/engine/gamification";
+import { getUserBucket } from "@/lib/auth-utils";
 
-const USER_BUCKET = "default";
+// USER_BUCKET is now derived from the authenticated user's session.
+// Each Server Action resolves it via getUserBucket().
 
 // ---------------------------------------------------------------------------
 // Profile
 // ---------------------------------------------------------------------------
 
 export async function fetchUserProfile(): Promise<UserProfileDTO> {
+  const userBucket = await getUserBucket();
   const profile = await db.userProfile.upsert({
-    where: { userBucket: USER_BUCKET },
+    where: { userBucket },
     update: {},
-    create: { userBucket: USER_BUCKET },
+    create: { userBucket },
   });
   return {
     userBucket: profile.userBucket,
@@ -83,9 +93,16 @@ export interface RecordAttemptResult {
   unlockedAchievements: AchievementDTO[];
   streakChanged: boolean;
   shieldConsumed: boolean;
+  shieldEarned: boolean;
+  /** XP milestones crossed (e.g., first time reaching 1000 XP) */
+  xpMilestonesHit: Array<{ xp: number; name: string; emoji: string }>;
+  /** Streak milestone crossed (e.g., first time reaching 30-day streak) */
+  streakMilestoneHit: { days: number; name: string; emoji: string } | null;
 }
 
 export async function recordAttempt(input: RecordAttemptInput): Promise<RecordAttemptResult> {
+  const userBucket = await getUserBucket();
+
   // Pull question for difficulty
   const question = await db.question.findUnique({
     where: { id: input.questionId },
@@ -96,7 +113,7 @@ export async function recordAttempt(input: RecordAttemptInput): Promise<RecordAt
   // 1. Create the attempt
   const attempt = await db.attempt.create({
     data: {
-      userBucket: USER_BUCKET,
+      userBucket,
       questionId: input.questionId,
       selectedKey: input.selectedKey,
       isCorrect: input.isCorrect,
@@ -113,7 +130,7 @@ export async function recordAttempt(input: RecordAttemptInput): Promise<RecordAt
     : 0;
 
   // 3. Update profile (XP + streak)
-  const profile = await db.userProfile.findUnique({ where: { userBucket: USER_BUCKET } });
+  const profile = await db.userProfile.findUnique({ where: { userBucket } });
   if (!profile) throw new Error("Profile missing");
 
   const today = todayKey();
@@ -122,8 +139,15 @@ export async function recordAttempt(input: RecordAttemptInput): Promise<RecordAt
   const newLevel = levelForXp(newXp);
   const leveledUp = newLevel > profile.level;
 
+  // Detect milestones
+  const xpMilestonesHit = getCrossedXpMilestones(profile.totalXp, newXp);
+  const streakMilestoneHit = getCrossedStreakMilestone(
+    profile.currentStreak,
+    streakUpdate.streak
+  );
+
   const updatedProfile = await db.userProfile.update({
-    where: { userBucket: USER_BUCKET },
+    where: { userBucket },
     data: {
       totalXp: newXp,
       level: newLevel,
@@ -136,7 +160,7 @@ export async function recordAttempt(input: RecordAttemptInput): Promise<RecordAt
 
   // 4. Update daily activity
   const existingDaily = await db.dailyActivity.findUnique({
-    where: { userBucket_date: { userBucket: USER_BUCKET, date: today } },
+    where: { userBucket_date: { userBucket, date: today } },
   });
 
   if (existingDaily) {
@@ -159,7 +183,7 @@ export async function recordAttempt(input: RecordAttemptInput): Promise<RecordAt
   } else {
     await db.dailyActivity.create({
       data: {
-        userBucket: USER_BUCKET,
+        userBucket,
         date: today,
         attempts: 1,
         correct: input.isCorrect ? 1 : 0,
@@ -177,38 +201,45 @@ export async function recordAttempt(input: RecordAttemptInput): Promise<RecordAt
   const allAchievements = await db.achievement.findMany();
 
   // Compute aggregates for threshold checks
-  const totalAttempts = await db.attempt.count({ where: { userBucket: USER_BUCKET } });
-  const totalCorrect = await db.attempt.count({ where: { userBucket: USER_BUCKET, isCorrect: true } });
+  const totalAttempts = await db.attempt.count({ where: { userBucket } });
+  const totalCorrect = await db.attempt.count({ where: { userBucket, isCorrect: true } });
   const longestStreak = updatedProfile.longestStreak;
+  const totalReviews = await db.reviewSchedule.count({
+    where: { userBucket, lastReviewedAt: { not: null } },
+  });
 
   // Get mastery levels per category for "master_category" check
+  // Total questions per category (efficient groupBy aggregation)
   const catStats = await db.question.groupBy({
     by: ["categoryId"],
     _count: true,
   });
-  const attemptedByCat = await db.attempt.groupBy({
-    by: ["questionId"],
-    where: { userBucket: USER_BUCKET },
-  });
-  // Map questionId -> categoryId
-  const questionCats = await db.question.findMany({
-    select: { id: true, categoryId: true },
-  });
-  const qToCat = new Map(questionCats.map((q) => [q.id, q.categoryId]));
-  const catCorrect: Record<string, { attempted: number; correct: number }> = {};
   const catTotal: Record<string, number> = {};
   for (const c of catStats) catTotal[c.categoryId] = c._count;
-  // Need to count attempts per category - query with joins
-  const allAttempts = await db.attempt.findMany({
-    where: { userBucket: USER_BUCKET },
-    select: { questionId: true, isCorrect: true },
-  });
-  for (const a of allAttempts) {
-    const catId = qToCat.get(a.questionId);
-    if (!catId) continue;
-    catCorrect[catId] = catCorrect[catId] ?? { attempted: 0, correct: 0 };
-    catCorrect[catId].attempted++;
-    if (a.isCorrect) catCorrect[catId].correct++;
+
+  // Aggregate attempts per category directly in the database using a JOIN,
+  // instead of loading ALL attempts + ALL questions into memory.
+  interface CatAttemptRow {
+    categoryId: string;
+    attempted: number;
+    correct: number;
+  }
+  const catAttemptRows = await db.$queryRaw<CatAttemptRow[]>`
+    SELECT q."categoryId",
+           COUNT(a.id)::int AS attempted,
+           SUM(CASE WHEN a."isCorrect" THEN 1 ELSE 0 END)::int AS correct
+    FROM attempts a
+    INNER JOIN questions q ON a."questionId" = q.id
+    WHERE a."userBucket" = ${userBucket}
+    GROUP BY q."categoryId"
+  `;
+
+  const catCorrect: Record<string, { attempted: number; correct: number }> = {};
+  for (const row of catAttemptRows) {
+    catCorrect[row.categoryId] = {
+      attempted: row.attempted,
+      correct: row.correct,
+    };
   }
   const maxMastery = Math.max(
     0,
@@ -216,6 +247,22 @@ export async function recordAttempt(input: RecordAttemptInput): Promise<RecordAt
       computeMastery(total, catCorrect[catId]?.attempted ?? 0, catCorrect[catId]?.correct ?? 0)
     )
   );
+
+  // Compute exam session scores once — shared by exam_pass and exam_perfect
+  const examSessionScores = await db.$queryRaw<{ scorePercent: number }[]>`
+    SELECT COALESCE(
+      ROUND(
+        SUM(CASE WHEN a."isCorrect" THEN 1 ELSE 0 END)::numeric
+        / COUNT(*)::numeric * 100
+      ), 0
+    )::int AS "scorePercent"
+    FROM attempts a
+    WHERE a."userBucket" = ${userBucket}
+      AND a.mode = 'exam'
+      AND a."sessionId" IS NOT NULL
+    GROUP BY a."sessionId"
+  `;
+  const maxExamScore = Math.max(0, ...examSessionScores.map((s) => s.scorePercent));
 
   for (const a of allAchievements) {
     if (alreadyUnlocked.has(a.slug)) continue;
@@ -230,18 +277,52 @@ export async function recordAttempt(input: RecordAttemptInput): Promise<RecordAt
         break;
       case "mastery":
         if (a.slug === "master_category") unlockedNow = maxMastery >= a.threshold;
-        else if (a.slug === "exam_pass") {
-          // threshold represents score %
-          // Check if any exam session had >= threshold %
-          // Simplified: skip for now, will check via session summary
+        else if (a.slug === "all_rounder") {
+          // Check if ALL categories have mastery >= threshold
+          const allAbove = Object.entries(catTotal).every(([catId, total]) => {
+            const stats = catCorrect[catId];
+            if (!stats || stats.attempted === 0) return false;
+            return computeMastery(total, stats.attempted, stats.correct) >= a.threshold;
+          });
+          unlockedNow = allAbove;
         }
+        else if (a.slug === "exam_pass" || a.slug === "exam_perfect") {
+          // threshold represents score %
+          // Use pre-computed maxExamScore from shared query
+          unlockedNow = maxExamScore >= a.threshold;
+        }
+        break;
+    }
+      case "speed":
+        if (a.slug === "speed_3s" || a.slug === "lightning") {
+          // Check if current attempt was answered fast enough
+          // Guard against timeMs = 0 (unset) by requiring > 0
+          const timeMs = input.timeMs ?? 9999;
+          const timeSec = timeMs / 1000;
+          unlockedNow = timeMs > 0 && timeSec <= a.threshold && input.isCorrect;
+        } else if (a.slug === "speed_10") {
+          // Check if last 10 attempts have average time under 15s
+          const recentAttemptTimes = await db.attempt.findMany({
+            where: { userBucket, isCorrect: true },
+            orderBy: { createdAt: "desc" },
+            take: 10,
+            select: { timeMs: true },
+          });
+          if (recentAttemptTimes.length >= 10) {
+            const avgTime = recentAttemptTimes.reduce((s, t) => s + t.timeMs, 0) / recentAttemptTimes.length;
+            unlockedNow = avgTime <= 15000;
+          }
+        }
+        break;
+      case "revision":
+        unlockedNow = totalReviews >= a.threshold;
         break;
     }
     if (unlockedNow) {
       const xpReward = a.xpReward;
       const newAch = [...alreadyUnlocked, a.slug];
       await db.userProfile.update({
-        where: { userBucket: USER_BUCKET },
+        where: { userBucket },
         data: {
           unlockedAchievements: JSON.stringify(newAch),
           totalXp: { increment: xpReward },
@@ -269,6 +350,9 @@ export async function recordAttempt(input: RecordAttemptInput): Promise<RecordAt
     unlockedAchievements: unlocked,
     streakChanged: streakUpdate.streak !== profile.currentStreak,
     shieldConsumed: streakUpdate.shieldConsumed,
+    shieldEarned: streakUpdate.shieldEarned,
+    xpMilestonesHit,
+    streakMilestoneHit,
   };
 }
 
@@ -277,22 +361,24 @@ export async function recordAttempt(input: RecordAttemptInput): Promise<RecordAt
 // ---------------------------------------------------------------------------
 
 export async function toggleFavorite(questionId: string): Promise<boolean> {
+  const userBucket = await getUserBucket();
   const existing = await db.favorite.findUnique({
-    where: { userBucket_questionId: { userBucket: USER_BUCKET, questionId } },
+    where: { userBucket_questionId: { userBucket, questionId } },
   });
   if (existing) {
     await db.favorite.delete({ where: { id: existing.id } });
     return false;
   }
   await db.favorite.create({
-    data: { userBucket: USER_BUCKET, questionId },
+    data: { userBucket, questionId },
   });
   return true;
 }
 
 export async function fetchFavoriteIds(): Promise<string[]> {
+  const userBucket = await getUserBucket();
   const favs = await db.favorite.findMany({
-    where: { userBucket: USER_BUCKET },
+    where: { userBucket },
     select: { questionId: true },
   });
   return favs.map((f) => f.questionId);
@@ -303,12 +389,13 @@ export async function fetchFavoriteIds(): Promise<string[]> {
 // ---------------------------------------------------------------------------
 
 export async function fetchCategoryMastery(): Promise<CategoryMastery[]> {
+  const userBucket = await getUserBucket();
   const cats = await db.category.findMany({ orderBy: { displayOrder: "asc" } });
   const totals = await db.question.groupBy({ by: ["categoryId"], _count: true });
   const totalMap = new Map(totals.map((t) => [t.categoryId, t._count]));
 
   const allAttempts = await db.attempt.findMany({
-    where: { userBucket: USER_BUCKET },
+    where: { userBucket },
     include: { question: { select: { categoryId: true } } },
   });
 
@@ -337,8 +424,9 @@ export async function fetchCategoryMastery(): Promise<CategoryMastery[]> {
 }
 
 export async function fetchRecentAttempts(limit = 20): Promise<AttemptDTO[]> {
+  const userBucket = await getUserBucket();
   const items = await db.attempt.findMany({
-    where: { userBucket: USER_BUCKET },
+    where: { userBucket },
     take: limit,
     orderBy: { createdAt: "desc" },
     include: { question: { include: { category: true, source: true } } },
@@ -347,36 +435,32 @@ export async function fetchRecentAttempts(limit = 20): Promise<AttemptDTO[]> {
 }
 
 export async function fetchMistakeQuestionIds(limit = 50): Promise<string[]> {
-  // Find questions where the latest attempt was wrong
-  const wrongAttempts = await db.attempt.findMany({
-    where: { userBucket: USER_BUCKET, isCorrect: false },
-    take: limit * 2,
+  const userBucket = await getUserBucket();
+  // Load most recent attempts, deduplicate in-memory (first = most recent),
+  // then return questions whose latest attempt was wrong.
+  // Using a generous take cap instead of loading ALL rows (old behavior).
+  const latestAttempts = await db.attempt.findMany({
+    where: { userBucket },
     orderBy: { createdAt: "desc" },
-    distinct: ["questionId"],
-    select: { questionId: true, createdAt: true },
+    take: 5000,
+    select: { questionId: true, isCorrect: true },
   });
-  // Filter out questions where there's a later correct attempt
-  const correctAttempts = await db.attempt.findMany({
-    where: { userBucket: USER_BUCKET, isCorrect: true },
-    select: { questionId: true, createdAt: true },
-  });
-  const latestCorrect = new Map<string, Date>();
-  for (const a of correctAttempts) {
-    const cur = latestCorrect.get(a.questionId);
-    if (!cur || a.createdAt > cur) latestCorrect.set(a.questionId, a.createdAt);
+  const seen = new Set<string>();
+  const mistakes: string[] = [];
+  for (const a of latestAttempts) {
+    if (seen.has(a.questionId)) continue;
+    seen.add(a.questionId);
+    if (!a.isCorrect && mistakes.length < limit) {
+      mistakes.push(a.questionId);
+    }
   }
-  return wrongAttempts
-    .filter((w) => {
-      const correctDate = latestCorrect.get(w.questionId);
-      return !correctDate || correctDate < w.createdAt;
-    })
-    .slice(0, limit)
-    .map((w) => w.questionId);
+  return mistakes;
 }
 
 export async function fetchDailyActivity(days = 84): Promise<DailyActivityDTO[]> {
+  const userBucket = await getUserBucket();
   const items = await db.dailyActivity.findMany({
-    where: { userBucket: USER_BUCKET },
+    where: { userBucket },
     orderBy: { date: "asc" },
     take: days,
   });
@@ -389,10 +473,11 @@ export async function fetchDailyActivity(days = 84): Promise<DailyActivityDTO[]>
 }
 
 export async function fetchDailyQuestProgress() {
+  const userBucket = await getUserBucket();
   const today = todayKey();
   const quest = questForDate(today);
   const todayActivity = await db.dailyActivity.findUnique({
-    where: { userBucket_date: { userBucket: USER_BUCKET, date: today } },
+    where: { userBucket_date: { userBucket, date: today } },
   });
   if (!todayActivity) {
     return { quest, current: 0, target: quest.target, complete: false };
@@ -423,44 +508,412 @@ export async function fetchDailyQuestProgress() {
 }
 
 // ---------------------------------------------------------------------------
-// Exam session
+// Spaced Repetition (SM-2)
+// ---------------------------------------------------------------------------
+
+import { applySm2, DEFAULT_SRS_STATE, type SrsQuality } from "@/lib/engine/srs";
+
+/**
+ * Fetch all question IDs that are due for review (nextReviewAt <= now),
+ * ordered by nextReviewAt ascending (most overdue first).
+ */
+export async function fetchDueReviewIds(limit = 50): Promise<string[]> {
+  const userBucket = await getUserBucket();
+  const now = new Date();
+  const schedules = await db.reviewSchedule.findMany({
+    where: { userBucket, nextReviewAt: { lte: now } },
+    orderBy: { nextReviewAt: "asc" },
+    take: limit,
+    select: { questionId: true },
+  });
+  return schedules.map((s) => s.questionId);
+}
+
+/**
+ * Fetch the total count of due reviews for dashboard badges.
+ */
+export async function fetchDueReviewCount(): Promise<number> {
+  const userBucket = await getUserBucket();
+  const now = new Date();
+  return db.reviewSchedule.count({
+    where: { userBucket, nextReviewAt: { lte: now } },
+  });
+}
+
+/**
+ * Record a review rating and update the SM-2 schedule.
+ * If no schedule exists yet, creates one with default values.
+ */
+export async function submitSrsReview(
+  questionId: string,
+  quality: SrsQuality
+): Promise<ReviewScheduleDTO> {
+  const userBucket = await getUserBucket();
+
+  // Upsert: get existing or create default
+  let schedule = await db.reviewSchedule.findUnique({
+    where: { userBucket_questionId: { userBucket, questionId } },
+  });
+
+  const currentState = schedule
+    ? {
+        easiness: schedule.easiness,
+        interval: schedule.interval,
+        repetitions: schedule.repetitions,
+      }
+    : DEFAULT_SRS_STATE;
+
+  const { newState, nextReviewAt } = applySm2(currentState, quality);
+
+  schedule = await db.reviewSchedule.upsert({
+    where: { userBucket_questionId: { userBucket, questionId } },
+    create: {
+      userBucket,
+      questionId,
+      easiness: newState.easiness,
+      interval: newState.interval,
+      repetitions: newState.repetitions,
+      nextReviewAt,
+      lastReviewedAt: new Date(),
+    },
+    update: {
+      easiness: newState.easiness,
+      interval: newState.interval,
+      repetitions: newState.repetitions,
+      nextReviewAt,
+      lastReviewedAt: new Date(),
+    },
+  });
+
+  return {
+    questionId: schedule.questionId,
+    easiness: schedule.easiness,
+    interval: schedule.interval,
+    repetitions: schedule.repetitions,
+    nextReviewAt: schedule.nextReviewAt.toISOString(),
+    lastReviewedAt: schedule.lastReviewedAt?.toISOString() ?? null,
+  };
+}
+
+/**
+ * Auto-register questions for SRS when the user gets them wrong in study mode.
+ * Creates a review schedule if one doesn't exist yet.
+ */
+export async function autoRegisterMistake(questionId: string): Promise<void> {
+  const userBucket = await getUserBucket();
+  const existing = await db.reviewSchedule.findUnique({
+    where: { userBucket_questionId: { userBucket, questionId } },
+  });
+  if (existing) return; // Already tracked
+
+  await db.reviewSchedule.create({
+    data: {
+      userBucket,
+      questionId,
+      easiness: DEFAULT_SRS_STATE.easiness,
+      interval: DEFAULT_SRS_STATE.interval,
+      repetitions: DEFAULT_SRS_STATE.repetitions,
+      nextReviewAt: new Date(), // Due immediately
+      lastReviewedAt: null,
+    },
+  });
+}
+
+/**
+ * Fetch the date of the next upcoming SRS review (the soonest future review).
+ * Returns null if there are no upcoming reviews scheduled.
+ */
+export async function fetchNextReviewDate(): Promise<string | null> {
+  const userBucket = await getUserBucket();
+  const now = new Date();
+  const schedule = await db.reviewSchedule.findFirst({
+    where: { userBucket, nextReviewAt: { gte: now } },
+    orderBy: { nextReviewAt: "asc" },
+    select: { nextReviewAt: true },
+  });
+  return schedule?.nextReviewAt.toISOString() ?? null;
+}
+
+/**
+ * Fetch stored exam session data (questionIds, selections) for the detail view.
+ */
+export async function fetchExamSessionData(sessionId: string): Promise<{
+  questionIds: string[];
+  selections: Record<string, string | null>;
+  actualDurationSec: number | null;
+} | null> {
+  const userBucket = await getUserBucket();
+  const data = await db.examSessionData.findUnique({
+    where: { sessionId },
+  });
+  if (!data) return null;
+  return {
+    questionIds: JSON.parse(data.questionIds) as string[],
+    selections: JSON.parse(data.selections) as Record<string, string | null>,
+    actualDurationSec: data.actualDurationSec,
+  };
+}
+
+/**
+ * Count how many SRS reviews were submitted today.
+ * Used for the daily review goal progress bar.
+ */
+export async function fetchTodayReviewCount(): Promise<number> {
+  const userBucket = await getUserBucket();
+  const now = new Date();
+  const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const endOfDay = new Date(startOfDay.getTime() + 86_400_000);
+  return db.reviewSchedule.count({
+    where: {
+      userBucket,
+      lastReviewedAt: { gte: startOfDay, lt: endOfDay },
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Recently Studied Categories — for "continue learning" dashboard section
+// ---------------------------------------------------------------------------
+
+export interface RecentCategoryInfo {
+  categorySlug: string;
+  categoryNameAr: string;
+  colorTheme: string | null;
+  icon: string | null;
+  lastAttemptAt: string;
+  attempted: number;
+  correct: number;
+  accuracy: number;
+}
+
+/**
+ * Fetch the most recently studied categories, ordered by most recent attempt.
+ * Returns up to `limit` categories with attempt stats and the latest attempt date.
+ */
+export async function fetchRecentlyStudiedCategories(limit = 5): Promise<RecentCategoryInfo[]> {
+  const userBucket = await getUserBucket();
+
+  const rows = await db.$queryRaw<{
+    categorySlug: string;
+    categoryNameAr: string;
+    colorTheme: string | null;
+    icon: string | null;
+    lastAttemptAt: Date;
+    attempted: number;
+    correct: number;
+  }[]>`
+    SELECT
+      c.slug AS "categorySlug",
+      c."nameAr" AS "categoryNameAr",
+      c."colorTheme",
+      c.icon,
+      MAX(a."createdAt") AS "lastAttemptAt",
+      COUNT(*)::int AS attempted,
+      SUM(CASE WHEN a."isCorrect" THEN 1 ELSE 0 END)::int AS correct
+    FROM attempts a
+    INNER JOIN questions q ON a."questionId" = q.id
+    INNER JOIN categories c ON q."categoryId" = c.id
+    WHERE a."userBucket" = ${userBucket}
+    GROUP BY c.slug, c."nameAr", c."colorTheme", c.icon
+    ORDER BY MAX(a."createdAt") DESC
+    LIMIT ${limit}
+  `;
+
+  return rows.map((r) => ({
+    categorySlug: r.categorySlug,
+    categoryNameAr: r.categoryNameAr,
+    colorTheme: r.colorTheme,
+    icon: r.icon,
+    lastAttemptAt: r.lastAttemptAt.toISOString(),
+    attempted: r.attempted,
+    correct: r.correct,
+    accuracy: r.attempted > 0 ? Math.round((r.correct / r.attempted) * 100) : 0,
+  }));
+}
+
+// ---------------------------------------------------------------------------
+// Weekly Challenge
+// ---------------------------------------------------------------------------
+
+/** Fetch the current weekly challenge with progress. */
+export async function fetchWeeklyChallenge(): Promise<{
+  challenge: { slug: string; descriptionAr: string; target: number; metric: string; rewardLabel: string };
+  current: number;
+  target: number;
+  complete: boolean;
+} | null> {
+  const userBucket = await getUserBucket();
+
+  const start = weekStartKey();
+  const end = weekEndKey();
+  const challenge = weeklyChallengeForDate(start);
+
+  const weekActivity = await db.dailyActivity.findMany({
+    where: {
+      userBucket,
+      date: { gte: start, lte: end },
+    },
+  });
+
+  let current = 0;
+  for (const day of weekActivity) {
+    switch (challenge.metric) {
+      case "attempts": current += day.attempts; break;
+      case "correct": current += day.correct; break;
+      case "xp": current += day.xpEarned; break;
+    }
+  }
+
+  return {
+    challenge,
+    current,
+    target: challenge.target,
+    complete: current >= challenge.target,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Speed Stats — average answer time per category
+// ---------------------------------------------------------------------------
+
+export async function fetchSpeedStats(): Promise<SpeedStatDTO[]> {
+  const userBucket = await getUserBucket();
+
+  const rows = await db.$queryRaw<{
+    categoryId: string;
+    categorySlug: string;
+    categoryNameAr: string;
+    colorTheme: string | null;
+    attempted: number;
+    avgTimeMs: number;
+  }[]>`
+    SELECT
+      q."categoryId",
+      c.slug AS "categorySlug",
+      c."nameAr" AS "categoryNameAr",
+      c."colorTheme",
+      COUNT(a.id)::int AS attempted,
+      COALESCE(ROUND(AVG(a."timeMs")::numeric), 0)::int AS "avgTimeMs"
+    FROM attempts a
+    INNER JOIN questions q ON a."questionId" = q.id
+    INNER JOIN categories c ON q."categoryId" = c.id
+    WHERE a."userBucket" = ${userBucket}
+      AND a."timeMs" > 0
+    GROUP BY q."categoryId", c.slug, c."nameAr", c."colorTheme"
+    ORDER BY "avgTimeMs" ASC
+  `;
+
+  return rows.map((r) => ({
+    categorySlug: r.categorySlug,
+    categoryNameAr: r.categoryNameAr,
+    colorTheme: r.colorTheme,
+    attempted: r.attempted,
+    avgTimeSec: r.avgTimeMs > 0 ? Math.round(r.avgTimeMs / 100) / 10 : 0,
+  }));
+}
+
+// ---------------------------------------------------------------------------
+// Exam history
+// ---------------------------------------------------------------------------
+
+/**
+ * Fetch all completed exam sessions grouped by sessionId, ordered newest first.
+ * Each session is built from the Attempt rows sharing the same sessionId
+ * where mode = 'exam'.
+ */
+export async function fetchExamHistory(): Promise<ExamSessionDTO[]> {
+  const userBucket = await getUserBucket();
+
+  // Get all exam attempts with sessionId, grouped by sessionId
+  const attempts = await db.attempt.findMany({
+    where: { userBucket, mode: "exam", sessionId: { not: null } },
+    orderBy: { createdAt: "asc" },
+    select: {
+      sessionId: true,
+      isCorrect: true,
+      createdAt: true,
+    },
+  });
+
+  // Group by sessionId
+  const groups = new Map<
+    string,
+    { createdAt: Date; total: number; correct: number }
+  >();
+  for (const a of attempts) {
+    if (!a.sessionId) continue;
+    if (!groups.has(a.sessionId)) {
+      groups.set(a.sessionId, {
+        createdAt: a.createdAt,
+        total: 0,
+        correct: 0,
+      });
+    }
+    const g = groups.get(a.sessionId)!;
+    g.total++;
+    if (a.isCorrect) g.correct++;
+  }
+
+  return Array.from(groups.entries())
+    .map(([sessionId, g]) => ({
+      sessionId,
+      date: g.createdAt.toISOString(),
+      total: g.total,
+      correct: g.correct,
+      wrong: g.total - g.correct,
+      skipped: 0, // We can't determine skipped from attempt records alone
+      scorePercent: g.total > 0 ? Math.round((g.correct / g.total) * 100) : 0,
+      durationSec: 0, // Not stored per-session yet
+    }))
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+}
+
+// ---------------------------------------------------------------------------
+// Exam session (finalize)
 // ---------------------------------------------------------------------------
 
 export async function finalizeExamSession(
   sessionId: string,
   questionIds: string[],
-  selections: Record<string, ArabicLetter | null>
+  selections: Record<string, ArabicLetter | null>,
+  actualDurationSec?: number
 ): Promise<{
   total: number;
   correct: number;
   scorePercent: number;
   xpEarned: number;
 }> {
+  // Batch-fetch all correct keys in a single query instead of N individual ones
+  const questions = await db.question.findMany({
+    where: { id: { in: questionIds } },
+    select: { id: true, correctKey: true },
+  });
+  const correctKeyMap = new Map(questions.map((q) => [q.id, q.correctKey]));
+
   let correct = 0;
-  // We trust that attempts were already recorded during exam via recordAttempt.
-  // Here we just compute the summary.
   for (const qid of questionIds) {
     const sel = selections[qid];
     if (!sel) continue;
-    // Look up correct key from question
-    const q = await db.question.findUnique({ where: { id: qid }, select: { correctKey: true } });
-    if (!q) continue;
-    if (sel === q.correctKey) correct++;
+    const correctKey = correctKeyMap.get(qid);
+    if (!correctKey) continue;
+    if (sel === correctKey) correct++;
   }
   const total = questionIds.length;
   const scorePercent = total > 0 ? Math.round((correct / total) * 100) : 0;
   const xpEarned = xpForExamSession(scorePercent);
 
+  const userBucket = await getUserBucket();
+
   // Award session XP
   await db.userProfile.update({
-    where: { userBucket: USER_BUCKET },
+    where: { userBucket },
     data: { totalXp: { increment: xpEarned } },
   });
 
   // Update daily activity xp
   const today = todayKey();
   const daily = await db.dailyActivity.findUnique({
-    where: { userBucket_date: { userBucket: USER_BUCKET, date: today } },
+    where: { userBucket_date: { userBucket, date: today } },
   });
   if (daily) {
     await db.dailyActivity.update({
@@ -468,6 +921,24 @@ export async function finalizeExamSession(
       data: { xpEarned: { increment: xpEarned } },
     });
   }
+
+  // Store session data for history detail view
+  await db.examSessionData.upsert({
+    where: { sessionId },
+    create: {
+      sessionId,
+      userBucket,
+      questionIds: JSON.stringify(questionIds),
+      selections: JSON.stringify(selections),
+      durationSec: 0, // We don't store the scheduled duration separately
+      actualDurationSec: actualDurationSec ?? null,
+    },
+    update: {
+      questionIds: JSON.stringify(questionIds),
+      selections: JSON.stringify(selections),
+      actualDurationSec: actualDurationSec ?? null,
+    },
+  });
 
   return { total, correct, scorePercent, xpEarned };
 }

@@ -8,6 +8,9 @@ import { categoryMeta, toArabicDigits, DIFFICULTY_META } from "@/lib/content/ui-
 import { cn } from "@/lib/utils";
 import { Search as SearchIcon, X, Filter, ArrowLeft } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { EmptyStateCard } from "./shared/EmptyStates";
+import { AnimatedChip } from "./shared/AnimatedChip";
+import type { SuggestionAction } from "./shared/EmptyStates";
 
 export function SearchView() {
   const { setView } = useViewStore();
@@ -120,14 +123,16 @@ export function SearchView() {
           <div>
             <div className="text-xs font-semibold text-muted-foreground mb-1.5">الفئة</div>
             <div className="flex flex-wrap gap-1.5">
-              <FilterChip
+              <AnimatedChip
+                variant="pill"
                 active={!categoryFilter}
                 onClick={() => setCategoryFilter(undefined)}
                 label="الكل"
               />
               {(categories ?? []).map((c) => (
-                <FilterChip
+                <AnimatedChip
                   key={c.id}
+                  variant="pill"
                   active={categoryFilter === c.slug}
                   onClick={() => setCategoryFilter(c.slug)}
                   label={c.nameAr}
@@ -140,14 +145,16 @@ export function SearchView() {
           <div>
             <div className="text-xs font-semibold text-muted-foreground mb-1.5">المصدر</div>
             <div className="flex flex-wrap gap-1.5">
-              <FilterChip
+              <AnimatedChip
+                variant="pill"
                 active={!sourceFilter}
                 onClick={() => setSourceFilter(undefined)}
                 label="الكل"
               />
               {(sources ?? []).map((s) => (
-                <FilterChip
+                <AnimatedChip
                   key={s.id}
+                  variant="pill"
                   active={sourceFilter === s.slug}
                   onClick={() => setSourceFilter(s.slug)}
                   label={s.title.length > 30 ? s.title.slice(0, 30) + "…" : s.title}
@@ -160,14 +167,16 @@ export function SearchView() {
           <div>
             <div className="text-xs font-semibold text-muted-foreground mb-1.5">الصعوبة</div>
             <div className="flex flex-wrap gap-1.5">
-              <FilterChip
+              <AnimatedChip
+                variant="pill"
                 active={!difficultyFilter}
                 onClick={() => setDifficultyFilter(undefined)}
                 label="الكل"
               />
               {Object.entries(DIFFICULTY_META).map(([key, meta]) => (
-                <FilterChip
+                <AnimatedChip
                   key={key}
+                  variant="pill"
                   active={difficultyFilter === key}
                   onClick={() => setDifficultyFilter(key)}
                   label={meta.labelAr}
@@ -182,12 +191,38 @@ export function SearchView() {
       {loading ? (
         <div className="text-center py-12 text-muted-foreground">جاري البحث…</div>
       ) : !results || results.length === 0 ? (
-        <div className="text-center py-12">
-          <SearchIcon className="h-12 w-12 mx-auto text-muted-foreground/50 mb-3" />
-          <p className="text-sm text-muted-foreground">
-            لا توجد نتائج. جرّب تعديل البحث أو التصفية.
-          </p>
-        </div>
+        <EmptyStateCard
+          illustration={debouncedQuery ? "search" : "filter"}
+          title={debouncedQuery ? "لا توجد نتائج للبحث" : "لا توجد نتائج للتصفية المحددة"}
+          description={
+            debouncedQuery
+              ? "لم نعثر على أسئلة تطابق كلمات البحث التي أدخلتها. جرّب كلمات مفتاحية مختلفة أو استخدم مصطلحات أوسع."
+              : "لم يتم العثور على أسئلة تطابق الفلتر الذي اخترته. جرّب توسيع نطاق التصفية أو اختيار فئة أخرى."
+          }
+          suggestions={[
+            {
+              label: debouncedQuery ? "مسح البحث" : "مسح التصفية",
+              onClick: () => {
+                setQuery("");
+                setCategoryFilter(undefined);
+                setSourceFilter(undefined);
+                setDifficultyFilter(undefined);
+              },
+              variant: "primary",
+            },
+            {
+              label: "تصفّح كل الأسئلة",
+              onClick: () => {
+                setQuery("");
+                setCategoryFilter(undefined);
+                setSourceFilter(undefined);
+                setDifficultyFilter(undefined);
+                setShowFilters(true);
+              },
+              variant: "secondary",
+            },
+          ]}
+        />
       ) : (
         <div className="space-y-2">
           {results.map((q, i) => {
@@ -233,28 +268,3 @@ export function SearchView() {
   );
 }
 
-// ---------------------------------------------------------------------------
-
-function FilterChip({
-  active,
-  onClick,
-  label,
-}: {
-  active: boolean;
-  onClick: () => void;
-  label: string;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={cn(
-        "rounded-full px-3 py-1 text-xs font-semibold transition-colors",
-        active
-          ? "bg-primary text-primary-foreground"
-          : "bg-muted text-muted-foreground hover:bg-muted/70"
-      )}
-    >
-      {label}
-    </button>
-  );
-}

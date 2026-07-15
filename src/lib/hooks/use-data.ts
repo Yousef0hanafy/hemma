@@ -20,20 +20,35 @@ import {
   fetchDailyActivity,
   fetchDailyQuestProgress,
   fetchFavoriteIds,
+  fetchExamHistory,
+  fetchExamSessionData,
+  fetchDueReviewIds,
+  fetchDueReviewCount,
+  fetchNextReviewDate,
+  fetchTodayReviewCount,
+  fetchSpeedStats,
+  fetchRecentlyStudiedCategories,
+  submitSrsReview,
+  autoRegisterMistake,
   recordAttempt,
   toggleFavorite,
   finalizeExamSession,
   type RecordAttemptInput,
 } from "@/server/actions/progress";
+import type { SrsQuality } from "@/lib/engine/srs";
 import {
   AchievementDTO,
   AttemptDTO,
   CategoryDTO,
   CategoryMastery,
   DailyActivityDTO,
+  ExamSessionDTO,
   QuestionDTO,
+  RecentCategoryInfo,
+  ReviewScheduleDTO,
   SourceDTO,
   UserProfileDTO,
+  SpeedStatDTO,
 } from "@/lib/content/dto";
 
 // Simple cache + invalidation pattern
@@ -58,7 +73,7 @@ function invalidate(keyPrefix: string) {
   }
 }
 
-function useServerData<T>(
+export function useServerData<T>(
   key: string,
   fetcher: () => Promise<T>,
   deps: unknown[] = []
@@ -175,6 +190,63 @@ export function useFavoriteIds() {
   return useServerData<string[]>("favorites", fetchFavoriteIds);
 }
 
+export function useExamHistory() {
+  return useServerData<ExamSessionDTO[]>("exam-history", fetchExamHistory);
+}
+
+export function useDueReviewIds(limit = 50) {
+  return useServerData<string[]>(
+    `due-reviews:${limit}`,
+    () => fetchDueReviewIds(limit),
+    [limit]
+  );
+}
+
+export function useDueReviewCount() {
+  return useServerData<number>("due-review-count", fetchDueReviewCount);
+}
+
+export function useNextReviewDate() {
+  return useServerData<string | null>(
+    "next-review-date",
+    fetchNextReviewDate
+  );
+}
+
+export function useTodayReviewCount() {
+  return useServerData<number>(
+    "today-review-count",
+    fetchTodayReviewCount
+  );
+}
+
+export function useSpeedStats() {
+  return useServerData<SpeedStatDTO[]>(
+    "speed-stats",
+    fetchSpeedStats
+  );
+}
+
+export function useRecentlyStudiedCategories(limit = 5) {
+  return useServerData<RecentCategoryInfo[]>(
+    `recent-categories:${limit}`,
+    () => fetchRecentlyStudiedCategories(limit),
+    [limit]
+  );
+}
+
+export function useExamSessionData(sessionId: string | null) {
+  return useServerData<{
+    questionIds: string[];
+    selections: Record<string, string | null>;
+    actualDurationSec: number | null;
+  } | null>(
+    `exam-session-data:${sessionId}`,
+    () => (sessionId ? fetchExamSessionData(sessionId) : Promise.resolve(null)),
+    [sessionId]
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Mutations
 // ---------------------------------------------------------------------------
@@ -188,6 +260,7 @@ export function useRecordAttempt() {
     invalidate("daily");
     invalidate("daily-quest");
     invalidate("profile");
+    invalidate("recent-categories");
     return result;
   }, []);
 }
@@ -200,17 +273,36 @@ export function useToggleFavorite() {
   }, []);
 }
 
+export function useSubmitSrsReview() {
+  return useCallback(async (questionId: string, quality: SrsQuality) => {
+    const result = await submitSrsReview(questionId, quality);
+    invalidate("due-reviews");
+    invalidate("due-review-count");
+    return result;
+  }, []);
+}
+
+export function useAutoRegisterMistake() {
+  return useCallback(async (questionId: string) => {
+    await autoRegisterMistake(questionId);
+    invalidate("due-reviews");
+    invalidate("due-review-count");
+  }, []);
+}
+
 export function useFinalizeExam() {
   return useCallback(
     async (
       sessionId: string,
       questionIds: string[],
-      selections: Record<string, string | null>
+      selections: Record<string, string | null>,
+      actualDurationSec?: number
     ) => {
       const result = await finalizeExamSession(
         sessionId,
         questionIds,
-        selections as Record<string, "أ" | "ب" | "ج" | "د" | null>
+        selections as Record<string, "أ" | "ب" | "ج" | "د" | null>,
+        actualDurationSec
       );
       invalidate("profile");
       invalidate("daily");
