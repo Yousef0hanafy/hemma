@@ -23,14 +23,15 @@ export default withSentryConfig(nextConfig, {
   project: process.env.SENTRY_PROJECT || "",
   authToken: process.env.SENTRY_AUTH_TOKEN,
   silent: !process.env.CI,
-  // Upload source maps in CI only to speed up local dev
+  
+  // دمج خيارات الـ sourcemaps في مكان واحد لتجنب التكرار
   sourcemaps: {
     disable: !process.env.CI,
+    deleteSourcemapsAfterUpload: true,
   },
+  
   // Route Sentry requests through the app to avoid ad-blockers
   tunnelRoute: "/sentry-tunnel",
-  // Hides source maps from the client bundle to protect code
-  hideSourceMaps: true,
   // Disable auto-instrumentation in development
   disableLogger: true,
 });
