@@ -174,7 +174,7 @@ async function main() {
   for (const q of testQuestions) {
     const dbQ = await db.question.findFirst({
       where: { sourceId: source.id, sourceLocalId: q.id },
-      include: { category: true, source: true },
+      include: { category: true, source: true, passage: true,},
     });
     if (!dbQ) continue;
     const dto = toQuestionDTO(dbQ);
