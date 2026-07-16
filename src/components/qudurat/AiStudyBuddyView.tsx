@@ -116,12 +116,13 @@ interface SessionListItem {
 
 export function AiStudyBuddyView() {
   const { view, setView, back } = useViewStore();
+  const castedView = view as any;
   const [messages, setMessages] = useState<BuddyMessage[]>([]);
-  const [input, setInput] = useState(view.initialQuestion ?? "");
+  const [input, setInput] = useState((view as any).initialQuestion ?? "");
   const [loading, setLoading] = useState(false);
   const [streamingText, setStreamingText] = useState("");
   const [initialLoading, setInitialLoading] = useState(
-    !!view.initialQuestion
+    !!castedView.initialQuestion
   );
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [restoring, setRestoring] = useState(true);
@@ -197,10 +198,10 @@ export function AiStudyBuddyView() {
 
   // ── Auto-send initial question ──────────────────────────────
   useEffect(() => {
-    if (view.initialQuestion && initialLoading) {
+    if (castedView.initialQuestion && initialLoading) {
       setInitialLoading(false);
       const timer = setTimeout(() => {
-        handleSendRef.current?.(view.initialQuestion!);
+        handleSendRef.current?.(castedView.initialQuestion!);
       }, 300);
       return () => clearTimeout(timer);
     }
@@ -214,10 +215,10 @@ export function AiStudyBuddyView() {
 
   // ── Focus input on mount ────────────────────────────────────
   useEffect(() => {
-    if (!view.initialQuestion) {
+    if (!castedView.initialQuestion) {
       inputRef.current?.focus();
     }
-  }, [view.initialQuestion]);
+  }, [castedView.initialQuestion]);
 
   // ── Abort in-flight request on unmount ──────────────────────
   useEffect(() => {

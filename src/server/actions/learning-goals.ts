@@ -46,7 +46,7 @@ const GOAL_LABELS: Record<GoalType, string> = {
   xp: "نقاط خبرة",
 };
 
-export async function goalLabel(type: GoalType): string {
+export function goalLabel(type: GoalType): string {
   return GOAL_LABELS[type];
 }
 
@@ -56,7 +56,7 @@ const GOAL_ICONS: Record<GoalType, string> = {
   xp: "⭐",
 };
 
-export async function goalIcon(type: GoalType): string {
+export function goalIcon(type: GoalType): string {
   return GOAL_ICONS[type];
 }
 
