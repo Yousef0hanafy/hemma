@@ -121,12 +121,12 @@ export async function createCategory(data: {
   await requireStudioAccess();
 
   const slug =
-    data.slug ??
+    (data.slug ??
     data.nameAr
       .replace(/\s+/g, "_")
       .replace(/[^\w\u0600-\u06FF]/g, "")
       .toLowerCase()
-      .slice(0, 50) || `cat_${Date.now()}`;
+      .slice(0, 50)) || `cat_${Date.now()}`;
 
   // Get the max display order for new category
   const maxOrder = await db.category.aggregate({

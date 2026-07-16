@@ -41,7 +41,7 @@ import {
 // Constants
 // ---------------------------------------------------------------------------
 
-const SUGGESTIONS = getSuggestions();
+const SUGGESTIONS = await getSuggestions();
 
 // ---------------------------------------------------------------------------
 // Helper — format markdown content for better display

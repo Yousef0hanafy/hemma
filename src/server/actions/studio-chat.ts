@@ -274,7 +274,7 @@ export interface Suggestion {
   prompt: string;
 }
 
-export function getSuggestions(): Suggestion[] {
+export async function getSuggestions(): Suggestion[] {
   return [
     {
       label: "تحليل حالة الأسئلة",
