@@ -21,6 +21,7 @@ const MAX_MESSAGE_LENGTH = 2000;
 const MAX_HISTORY_LENGTH = 20;
 const MAX_TOTAL_HISTORY_CHARS = 10000;
 const AI_TIMEOUT_MS = 30000; // 30 second timeout for AI operations
+const MAX_REQUEST_BODY_SIZE = 100 * 1024; // 100KB max request body
 
 // ---------------------------------------------------------------------
 // Helpers
@@ -85,6 +86,20 @@ function withTimeout<T>(
   ]);
 }
 
+/**
+ * Validates request body size to prevent DoS attacks
+ */
+function validateRequestBodySize(request: Request): boolean {
+  const contentLength = request.headers.get("content-length");
+  if (contentLength) {
+    const size = parseInt(contentLength, 10);
+    if (size > MAX_REQUEST_BODY_SIZE) {
+      return false;
+    }
+  }
+  return true;
+}
+
 // ---------------------------------------------------------------------
 // POST handler
 // ---------------------------------------------------------------------
@@ -104,6 +119,14 @@ export async function POST(req: NextRequest) {
   const rateLimitResult = aiRateLimiter.check(clientIdentifier);
   const rateLimitResponseResult = rateLimitResponse(rateLimitResult);
   if (rateLimitResponseResult) return rateLimitResponseResult;
+
+  // ── Request size validation ────────────────────────────────────
+  if (!validateRequestBodySize(req)) {
+    return new Response(JSON.stringify({ error: "حجم الطلب كبير جداً" }), {
+      status: 413,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
 
   // ── Input validation ──────────────────────────────────────────────
   let history: ChatMessage[];
