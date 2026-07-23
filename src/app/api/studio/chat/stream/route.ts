@@ -11,6 +11,7 @@ import { authOptions } from "@/lib/auth";
 import { getGeminiClient, getAIModelName } from "@/server/ai/evaluator";
 import { buildSystemPrompt } from "@/server/actions/studio-chat";
 import type { ChatMessage } from "@/server/actions/studio-chat";
+import { aiRateLimiter, getClientIdentifier, rateLimitResponse } from "@/lib/rate-limiter";
 
 // ---------------------------------------------------------------------
 // Constants
@@ -80,6 +81,12 @@ export async function POST(req: NextRequest) {
       headers: { "Content-Type": "application/json" },
     });
   }
+
+  // ── Rate limiting ──────────────────────────────────────────────
+  const clientIdentifier = getClientIdentifier(req);
+  const rateLimitResult = aiRateLimiter.check(clientIdentifier);
+  const rateLimitResponseResult = rateLimitResponse(rateLimitResult);
+  if (rateLimitResponseResult) return rateLimitResponseResult;
 
   // ── Input validation ──────────────────────────────────────────────
   let history: ChatMessage[];
