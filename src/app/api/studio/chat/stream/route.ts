@@ -20,6 +20,7 @@ import { aiRateLimiter, getClientIdentifier, rateLimitResponse } from "@/lib/rat
 const MAX_MESSAGE_LENGTH = 2000;
 const MAX_HISTORY_LENGTH = 20;
 const MAX_TOTAL_HISTORY_CHARS = 10000;
+const AI_TIMEOUT_MS = 30000; // 30 second timeout for AI operations
 
 // ---------------------------------------------------------------------
 // Helpers
@@ -66,6 +67,22 @@ function validateHistory(history: ChatMessage[]): { valid: boolean; error?: stri
   }
   
   return { valid: true };
+}
+
+/**
+ * Wraps a promise with a timeout to prevent hanging requests
+ */
+function withTimeout<T>(
+  promise: Promise<T>,
+  ms: number,
+  errorMessage: string
+): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error(errorMessage)), ms)
+    ),
+  ]);
 }
 
 // ---------------------------------------------------------------------
@@ -176,8 +193,12 @@ export async function POST(req: NextRequest) {
           ],
         });
 
-        // Stream from Gemini
-        const result = await geminiModel.generateContentStream({ contents });
+        // Stream from Gemini with timeout
+        const result = await withTimeout(
+          geminiModel.generateContentStream({ contents }),
+          AI_TIMEOUT_MS,
+          "انتهى وقت الاتصال بخدمة AI. حاول مرة أخرى."
+        );
 
         for await (const chunk of result.stream) {
           const text = chunk.text();

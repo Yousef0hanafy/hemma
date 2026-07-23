@@ -98,6 +98,7 @@ export const apiRateLimiter = new RateLimiter({
 });
 
 // Helper to get client identifier (IP or user ID)
+// Sanitizes input to prevent header injection attacks
 export function getClientIdentifier(request: Request): string {
   // Try to get user ID from session (more accurate than IP)
   // In practice, you'd use getServerSession here
@@ -108,7 +109,11 @@ export function getClientIdentifier(request: Request): string {
                    request.headers.get("x-real-ip") || 
                    "unknown";
   
-  return clientIP;
+  // Sanitize to prevent header injection - only allow alphanumeric, dots, dashes
+  const sanitized = clientIP.replace(/[^a-zA-Z0-9.\-:]/g, "");
+  
+  // Limit length to prevent abuse
+  return sanitized.slice(0, 45) || "unknown";
 }
 
 // Rate limit response helper
