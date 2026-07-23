@@ -288,19 +288,22 @@ export async function updateQuestionField(
   const oldValue = raw === null ? "" : String(raw);
 
   try {
-    await db.question.update({
-      where: { id: questionId },
-      data: { [field]: value },
-    });
+    // Use transaction to ensure both operations succeed or fail together
+    await db.$transaction(async (tx) => {
+      await tx.question.update({
+        where: { id: questionId },
+        data: { [field]: value },
+      });
 
-    await db.questionVersion.create({
-      data: {
-        questionId,
-        field,
-        oldValue,
-        newValue: value,
-        changedBy: userId,
-      },
+      await tx.questionVersion.create({
+        data: {
+          questionId,
+          field,
+          oldValue,
+          newValue: value,
+          changedBy: userId,
+        },
+      });
     });
 
     revalidatePath(`/studio/questions/${questionId}`);
@@ -349,19 +352,22 @@ export async function updateQuestionTags(
   const oldValue = current.tags;
 
   try {
-    await db.question.update({
-      where: { id: questionId },
-      data: { tags: JSON.stringify(tags) },
-    });
+    // Use transaction to ensure both operations succeed or fail together
+    await db.$transaction(async (tx) => {
+      await tx.question.update({
+        where: { id: questionId },
+        data: { tags: JSON.stringify(tags) },
+      });
 
-    await db.questionVersion.create({
-      data: {
-        questionId,
-        field: "tags",
-        oldValue,
-        newValue: JSON.stringify(tags),
-        changedBy: userId,
-      },
+      await tx.questionVersion.create({
+        data: {
+          questionId,
+          field: "tags",
+          oldValue,
+          newValue: JSON.stringify(tags),
+          changedBy: userId,
+        },
+      });
     });
 
     revalidatePath(`/studio/questions/${questionId}`);
@@ -416,19 +422,22 @@ export async function updateQuestionOptions(
   const oldValue = current.options;
 
   try {
-    await db.question.update({
-      where: { id: questionId },
-      data: { options: JSON.stringify(options) },
-    });
+    // Use transaction to ensure both operations succeed or fail together
+    await db.$transaction(async (tx) => {
+      await tx.question.update({
+        where: { id: questionId },
+        data: { options: JSON.stringify(options) },
+      });
 
-    await db.questionVersion.create({
-      data: {
-        questionId,
-        field: "options",
-        oldValue,
-        newValue: JSON.stringify(options),
-        changedBy: userId,
-      },
+      await tx.questionVersion.create({
+        data: {
+          questionId,
+          field: "options",
+          oldValue,
+          newValue: JSON.stringify(options),
+          changedBy: userId,
+        },
+      });
     });
 
     revalidatePath(`/studio/questions/${questionId}`);
@@ -540,18 +549,21 @@ export async function bulkApplyField(
   const questionIds = questions.map((q) => q.id);
   if (questionIds.length === 0) return { updated: 0 };
 
-  await db.question.updateMany({
-    where: { id: { in: questionIds } },
-    data: { [field]: value },
-  });
+  // Use transaction for bulk update to ensure atomicity
+  await db.$transaction(async (tx) => {
+    await tx.question.updateMany({
+      where: { id: { in: questionIds } },
+      data: { [field]: value },
+    });
 
-  await db.questionVersion.createMany({
-    data: questionIds.map((qId) => ({
-      questionId: qId,
-      field,
-      newValue: value,
-      changedBy: userId,
-    })),
+    await tx.questionVersion.createMany({
+      data: questionIds.map((qId) => ({
+        questionId: qId,
+        field,
+        newValue: value,
+        changedBy: userId,
+      })),
+    });
   });
 
   return { updated: questionIds.length };

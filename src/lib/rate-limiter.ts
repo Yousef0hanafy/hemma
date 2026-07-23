@@ -35,12 +35,16 @@ class RateLimiter {
     }
   }
 
+  /**
+   * Atomic check-and-increment to prevent race conditions
+   * Returns success only if the request is within the rate limit
+   */
   public check(identifier: string): { success: boolean; remaining: number; resetTime: number } {
     const now = Date.now();
     const entry = this.store.get(identifier);
 
     if (!entry || entry.resetTime <= now) {
-      // Create new entry
+      // Create new entry atomically
       const resetTime = now + this.config.windowMs;
       this.store.set(identifier, { count: 1, resetTime });
       return {
@@ -64,7 +68,7 @@ class RateLimiter {
       };
     }
 
-    // Increment count
+    // Increment count atomically
     entry.count++;
     return {
       success: true,
