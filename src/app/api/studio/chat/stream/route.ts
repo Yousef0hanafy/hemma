@@ -13,6 +13,61 @@ import { buildSystemPrompt } from "@/server/actions/studio-chat";
 import type { ChatMessage } from "@/server/actions/studio-chat";
 
 // ---------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------
+
+const MAX_MESSAGE_LENGTH = 2000;
+const MAX_HISTORY_LENGTH = 20;
+const MAX_TOTAL_HISTORY_CHARS = 10000;
+
+// ---------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------
+
+/** Validate and sanitize message content */
+function validateMessage(message: string): { valid: boolean; error?: string } {
+  if (!message || typeof message !== "string") {
+    return { valid: false, error: "الرجاء كتابة رسالة" };
+  }
+  
+  const trimmed = message.trim();
+  if (trimmed.length === 0) {
+    return { valid: false, error: "الرجاء كتابة رسالة" };
+  }
+  
+  if (trimmed.length > MAX_MESSAGE_LENGTH) {
+    return { valid: false, error: `الرسالة طويلة جداً (الحد الأقصى ${MAX_MESSAGE_LENGTH} حرف)` };
+  }
+  
+  return { valid: true };
+}
+
+/** Validate and sanitize history */
+function validateHistory(history: ChatMessage[]): { valid: boolean; error?: string } {
+  if (!Array.isArray(history)) {
+    return { valid: false, error: "بيانات المحادثة غير صالحة" };
+  }
+  
+  if (history.length > MAX_HISTORY_LENGTH) {
+    return { valid: false, error: "المحادثة طويلة جداً" };
+  }
+  
+  let totalChars = 0;
+  for (const msg of history) {
+    if (!msg.content || typeof msg.content !== "string") {
+      return { valid: false, error: "رسالة غير صالحة في المحادثة" };
+    }
+    totalChars += msg.content.length;
+  }
+  
+  if (totalChars > MAX_TOTAL_HISTORY_CHARS) {
+    return { valid: false, error: "المحادثة طويلة جداً" };
+  }
+  
+  return { valid: true };
+}
+
+// ---------------------------------------------------------------------
 // POST handler
 // ---------------------------------------------------------------------
 
@@ -41,8 +96,18 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  if (!message) {
-    return new Response(JSON.stringify({ error: "الرجاء كتابة رسالة" }), {
+  // ── Validate inputs ────────────────────────────────────────────────
+  const messageValidation = validateMessage(message);
+  if (!messageValidation.valid) {
+    return new Response(JSON.stringify({ error: messageValidation.error }), {
+      status: 400,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  const historyValidation = validateHistory(history);
+  if (!historyValidation.valid) {
+    return new Response(JSON.stringify({ error: historyValidation.error }), {
       status: 400,
       headers: { "Content-Type": "application/json" },
     });

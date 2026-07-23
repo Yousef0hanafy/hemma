@@ -10,6 +10,14 @@ import { db } from "@/lib/db";
 import { getGeminiClient, getAIModelName } from "@/server/ai/evaluator";
 
 // -------------------------------------------------------------------
+// Constants
+// -------------------------------------------------------------------
+
+const MAX_MESSAGE_LENGTH = 2000;
+const MAX_HISTORY_LENGTH = 20;
+const MAX_TOTAL_HISTORY_CHARS = 10000;
+
+// -------------------------------------------------------------------
 // Types
 // -------------------------------------------------------------------
 
@@ -108,6 +116,49 @@ function autoTitle(text: string): string {
   return cleaned.length > 40 ? cleaned.slice(0, 40) + "…" : cleaned;
 }
 
+/** Validate and sanitize message content */
+function validateMessage(message: string): { valid: boolean; error?: string } {
+  if (!message || typeof message !== "string") {
+    return { valid: false, error: "الرجاء كتابة سؤال" };
+  }
+  
+  const trimmed = message.trim();
+  if (trimmed.length === 0) {
+    return { valid: false, error: "الرجاء كتابة سؤال" };
+  }
+  
+  if (trimmed.length > MAX_MESSAGE_LENGTH) {
+    return { valid: false, error: `الرسالة طويلة جداً (الحد الأقصى ${MAX_MESSAGE_LENGTH} حرف)` };
+  }
+  
+  return { valid: true };
+}
+
+/** Validate and sanitize history */
+function validateHistory(history: BuddyMessage[]): { valid: boolean; error?: string } {
+  if (!Array.isArray(history)) {
+    return { valid: false, error: "بيانات المحادثة غير صالحة" };
+  }
+  
+  if (history.length > MAX_HISTORY_LENGTH) {
+    return { valid: false, error: "المحادثة طويلة جداً" };
+  }
+  
+  let totalChars = 0;
+  for (const msg of history) {
+    if (!msg.content || typeof msg.content !== "string") {
+      return { valid: false, error: "رسالة غير صالحة في المحادثة" };
+    }
+    totalChars += msg.content.length;
+  }
+  
+  if (totalChars > MAX_TOTAL_HISTORY_CHARS) {
+    return { valid: false, error: "المحادثة طويلة جداً" };
+  }
+  
+  return { valid: true };
+}
+
 // -------------------------------------------------------------------
 // POST — stream AI response + persist messages
 // -------------------------------------------------------------------
@@ -140,9 +191,19 @@ export async function POST(request: Request) {
 
   const { history = [], message, sessionId: incomingSessionId } = body;
 
-  if (!message?.trim()) {
+  // ── Validate inputs ──────────────────────────────────────────
+  const messageValidation = validateMessage(message ?? "");
+  if (!messageValidation.valid) {
     return new Response(
-      JSON.stringify({ error: "الرجاء كتابة سؤال" }),
+      JSON.stringify({ error: messageValidation.error }),
+      { status: 400, headers: { "Content-Type": "application/json" } }
+    );
+  }
+
+  const historyValidation = validateHistory(history);
+  if (!historyValidation.valid) {
+    return new Response(
+      JSON.stringify({ error: historyValidation.error }),
       { status: 400, headers: { "Content-Type": "application/json" } }
     );
   }
@@ -179,7 +240,7 @@ export async function POST(request: Request) {
   } else {
     // Create a new session
     const newSession = await db.chatSession.create({
-      data: { userId, title: autoTitle(message) },
+      data: { userId, title: autoTitle(message ?? "") },
     });
     activeSessionId = newSession.id;
     isNewSession = true;
@@ -190,7 +251,7 @@ export async function POST(request: Request) {
     data: {
       sessionId: activeSessionId,
       role: "user",
-      content: message,
+      content: message ?? "",
     },
   });
 

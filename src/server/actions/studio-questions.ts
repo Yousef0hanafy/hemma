@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 import { generateAIExplanation, estimateDifficultyAI } from "@/server/ai/evaluator";
+import { isValidId, isValidLength, isValidEnum } from "@/lib/studio-auth";
 
 // ── Circuit Breaker for AI Services ─────────────────────────────
 const aiCircuitState = new Map<string, {
@@ -115,6 +116,18 @@ export interface EditableField {
 }
 
 // ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
+const VALID_DIFFICULTIES = ["easy", "medium", "hard"] as const;
+const VALID_STATUSES = ["draft", "review", "approved", "published", "archived"] as const;
+const MAX_TEXT_LENGTH = 5000;
+const MAX_TAGS_LENGTH = 100;
+const MAX_TAG_LENGTH = 50;
+const MAX_OPTIONS_COUNT = 10;
+const MAX_OPTION_LENGTH = 500;
+
+// ---------------------------------------------------------------------------
 // Get full question detail
 // ---------------------------------------------------------------------------
 
@@ -123,7 +136,7 @@ export async function getQuestionDetail(
 ): Promise<QuestionDetail | null> {
   await requirePermission("question", "read");
 
-  if (!id || typeof id !== "string") {
+  if (!isValidId(id)) {
     throw new Error("Invalid question ID");
   }
 
@@ -227,7 +240,7 @@ export async function updateQuestionField(
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const userId = await requirePermission("question", "update");
 
-  if (!questionId || typeof questionId !== "string") {
+  if (!isValidId(questionId)) {
     return { ok: false, error: "معرّف السؤال غير صالح" };
   }
 
@@ -244,15 +257,24 @@ export async function updateQuestionField(
     return { ok: false, error: "الحقل غير قابل للتعديل" };
   }
 
-  if (field === "difficulty" && !["easy", "medium", "hard"].includes(value)) {
-    return { ok: false, error: "قيمة الصعوبة غير صالحة" };
+  // Validate field-specific constraints
+  if (field === "difficulty") {
+    if (!isValidEnum(value, VALID_DIFFICULTIES)) {
+      return { ok: false, error: "قيمة الصعوبة غير صالحة" };
+    }
   }
 
-  if (
-    field === "status" &&
-    !["draft", "review", "approved", "published", "archived"].includes(value)
-  ) {
-    return { ok: false, error: "قيمة الحالة غير صالحة" };
+  if (field === "status") {
+    if (!isValidEnum(value, VALID_STATUSES)) {
+      return { ok: false, error: "قيمة الحالة غير صالحة" };
+    }
+  }
+
+  // Validate text field lengths
+  if (["stem", "explanation", "studyTip", "citation"].includes(field)) {
+    if (!isValidLength(value, MAX_TEXT_LENGTH)) {
+      return { ok: false, error: "القيمة غير صالحة أو طويلة جداً" };
+    }
   }
 
   const current = await db.question.findUnique({
@@ -298,12 +320,23 @@ export async function updateQuestionTags(
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const userId = await requirePermission("question", "update");
 
-  if (!questionId || typeof questionId !== "string") {
+  if (!isValidId(questionId)) {
     return { ok: false, error: "معرّف السؤال غير صالح" };
   }
 
   if (!Array.isArray(tags)) {
     return { ok: false, error: "الوسوم يجب أن تكون مصفوفة" };
+  }
+
+  if (tags.length > MAX_TAGS_LENGTH) {
+    return { ok: false, error: "عدد الوسوم كبير جداً" };
+  }
+
+  // Validate each tag
+  for (const tag of tags) {
+    if (typeof tag !== "string" || !isValidLength(tag, MAX_TAG_LENGTH)) {
+      return { ok: false, error: "وسم غير صالح" };
+    }
   }
 
   const current = await db.question.findUnique({
@@ -348,12 +381,29 @@ export async function updateQuestionOptions(
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const userId = await requirePermission("question", "update");
 
-  if (!questionId || typeof questionId !== "string") {
+  if (!isValidId(questionId)) {
     return { ok: false, error: "معرّف السؤال غير صالح" };
   }
 
   if (!Array.isArray(options)) {
     return { ok: false, error: "الخيارات يجب أن تكون مصفوفة" };
+  }
+
+  if (options.length > MAX_OPTIONS_COUNT) {
+    return { ok: false, error: "عدد الخيارات كبير جداً" };
+  }
+
+  // Validate each option
+  for (const option of options) {
+    if (
+      !option ||
+      typeof option !== "object" ||
+      typeof option.key !== "string" ||
+      typeof option.text !== "string" ||
+      !isValidLength(option.text, MAX_OPTION_LENGTH)
+    ) {
+      return { ok: false, error: "خيار غير صالح" };
+    }
   }
 
   const current = await db.question.findUnique({
@@ -397,7 +447,7 @@ export async function getQuestionVersions(
 ): Promise<QuestionVersionInfo[]> {
   await requirePermission("question", "read");
 
-  if (!questionId || typeof questionId !== "string") {
+  if (!isValidId(questionId)) {
     throw new Error("Invalid question ID");
   }
 
@@ -446,14 +496,22 @@ export async function bulkApplyField(
     throw new Error("الحقل غير قابل للتطبيق الجماعي");
   }
 
-  if (field === "difficulty" && !["easy", "medium", "hard"].includes(value)) {
-    throw new Error("قيمة الصعوبة غير صالحة");
+  if (field === "difficulty") {
+    if (!isValidEnum(value, VALID_DIFFICULTIES)) {
+      throw new Error("قيمة الصعوبة غير صالحة");
+    }
   }
-  if (
-    field === "status" &&
-    !["draft", "review", "approved", "published", "archived"].includes(value)
-  ) {
-    throw new Error("قيمة الحالة غير صالحة");
+  if (field === "status") {
+    if (!isValidEnum(value, VALID_STATUSES)) {
+      throw new Error("قيمة الحالة غير صالحة");
+    }
+  }
+
+  // Validate text field lengths
+  if (["explanation", "studyTip", "citation"].includes(field)) {
+    if (!isValidLength(value, MAX_TEXT_LENGTH)) {
+      throw new Error("القيمة غير صالحة أو طويلة جداً");
+    }
   }
 
   const where: Record<string, unknown> = {};
@@ -539,7 +597,7 @@ export async function generateExplanationForQuestion(
 > {
   await requirePermission("ai_processing", "create");
 
-  if (!questionId || typeof questionId !== "string") {
+  if (!isValidId(questionId)) {
     return { ok: false, error: "معرّف السؤال غير صالح" };
   }
 
@@ -607,7 +665,7 @@ export async function estimateDifficultyForQuestion(
 > {
   await requirePermission("ai_processing", "create");
 
-  if (!questionId || typeof questionId !== "string") {
+  if (!isValidId(questionId)) {
     return { ok: false, error: "معرّف السؤال غير صالح" };
   }
 
@@ -663,7 +721,7 @@ export async function getAdjacentQuestionIds(
 ): Promise<{ prevId: string | null; nextId: string | null }> {
   await requirePermission("question", "read");
 
-  if (!questionId || typeof questionId !== "string") {
+  if (!isValidId(questionId)) {
     throw new Error("Invalid question ID");
   }
 
