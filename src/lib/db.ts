@@ -4,7 +4,7 @@ const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined
 }
 
-// Configure connection pooling for production
+// Configure connection pooling and timeouts for production
 const prismaClientOptions = {
   log: ['error', 'warn'],
   // Connection pool configuration for production

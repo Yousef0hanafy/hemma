@@ -101,20 +101,44 @@ export const apiRateLimiter = new RateLimiter({
   max: 60,         // 60 requests per minute per user
 });
 
-// Helper to get client identifier (IP or user ID)
-// Sanitizes input to prevent header injection attacks
-export function getClientIdentifier(request: Request): string {
-  // Try to get user ID from session (more accurate than IP)
-  // In practice, you'd use getServerSession here
-  // For now, fall back to IP-based identification
+/**
+ * Validates an IP address format
+ */
+function isValidIP(ip: string): boolean {
+  // IPv4 validation
+  const ipv4Regex = /^(\d{1,3}\.){3}\d{1,3}$/;
+  if (ipv4Regex.test(ip)) {
+    const parts = ip.split('.');
+    return parts.every(part => parseInt(part, 10) <= 255);
+  }
   
+  // IPv6 validation (simplified)
+  const ipv6Regex = /^([0-9a-fA-F]{0,4}:){2,7}[0-9a-fA-F]{0,4}$/;
+  if (ipv6Regex.test(ip)) {
+    return true;
+  }
+  
+  return false;
+}
+
+/**
+ * Helper to get client identifier (IP or user ID)
+ * Sanitizes input to prevent header injection attacks and validates IP format
+ */
+export function getClientIdentifier(request: Request): string {
   const forwardedFor = request.headers.get("x-forwarded-for");
   const clientIP = forwardedFor?.split(",")[0]?.trim() || 
                    request.headers.get("x-real-ip") || 
                    "unknown";
   
-  // Sanitize to prevent header injection - only allow alphanumeric, dots, dashes
+  // Sanitize to prevent header injection - only allow alphanumeric, dots, dashes, colons
   const sanitized = clientIP.replace(/[^a-zA-Z0-9.\-:]/g, "");
+  
+  // Validate IP format - reject if not a valid IP address
+  if (sanitized !== "unknown" && !isValidIP(sanitized)) {
+    console.warn(`[RateLimiter] Invalid IP address format rejected: ${sanitized}`);
+    return "unknown";
+  }
   
   // Limit length to prevent abuse
   return sanitized.slice(0, 45) || "unknown";

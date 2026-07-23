@@ -88,16 +88,54 @@ function withTimeout<T>(
 
 /**
  * Validates request body size to prevent DoS attacks
+ * Reads the stream with a size limit
  */
-function validateRequestBodySize(request: Request): boolean {
+async function validateAndParseBody(request: Request): Promise<any> {
   const contentLength = request.headers.get("content-length");
   if (contentLength) {
     const size = parseInt(contentLength, 10);
     if (size > MAX_REQUEST_BODY_SIZE) {
-      return false;
+      throw new Error("حجم الطلب كبير جداً");
     }
   }
-  return true;
+
+  // Read the body with size limit
+  const reader = request.body?.getReader();
+  if (!reader) {
+    throw new Error("طلب غير صالح");
+  }
+
+  let receivedLength = 0;
+  const chunks: Uint8Array[] = [];
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      
+      if (done) {
+        break;
+      }
+
+      receivedLength += value.length;
+      if (receivedLength > MAX_REQUEST_BODY_SIZE) {
+        throw new Error("حجم الطلب كبير جداً");
+      }
+
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  const bodyBytes = new Uint8Array(receivedLength);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bodyBytes.set(chunk, offset);
+    offset += chunk.length;
+  }
+
+  const bodyText = new TextDecoder().decode(bodyBytes);
+  return JSON.parse(bodyText);
 }
 
 // ---------------------------------------------------------------------
@@ -121,24 +159,17 @@ export async function POST(req: NextRequest) {
   if (rateLimitResponseResult) return rateLimitResponseResult;
 
   // ── Request size validation ────────────────────────────────────
-  if (!validateRequestBodySize(req)) {
-    return new Response(JSON.stringify({ error: "حجم الطلب كبير جداً" }), {
-      status: 413,
-      headers: { "Content-Type": "application/json" },
-    });
-  }
-
-  // ── Input validation ──────────────────────────────────────────────
   let history: ChatMessage[];
   let message: string;
 
   try {
-    const body = await req.json();
+    const body = await validateAndParseBody(req);
     history = body.history ?? [];
     message = body.message?.trim() ?? "";
-  } catch {
-    return new Response(JSON.stringify({ error: "طلب غير صالح" }), {
-      status: 400,
+  } catch (e) {
+    const errorMsg = e instanceof Error ? e.message : "طلب غير صالح";
+    return new Response(JSON.stringify({ error: errorMsg }), {
+      status: 413,
       headers: { "Content-Type": "application/json" },
     });
   }
