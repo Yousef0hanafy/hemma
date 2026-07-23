@@ -1,0 +1,479 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-cairo);
+  --font-naskh: var(--font-naskh);
+  --font-display: var(--font-naskh);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+:root {
+  --radius: 0.75rem;
+
+  /* ── Physics-based easing curves via CSS linear() ────────────
+     These generate natural-feeling spring/bounce curves that
+     overshoot the target value before settling, mimicking real
+     physical motion — far more organic than cubic-bezier.
+     Generated via https://linear-easing-generator.vercel.app
+     ──────────────────────────────────────────────────────── */
+  --spring-easing: linear(0, 0.016 0.5%, 0.06 1%, 0.226 2%, 1.116 5.4%, 1.375 6.6%, 1.527 7.7%, 1.565 8.2%, 1.585 8.8%, 1.581 9.3%, 1.559 9.8%, 1.458 10.9%, 0.937 14.3%, 0.784 15.5%, 0.693 16.6%, 0.67 17.1%, 0.657 17.7%, 0.671 18.7%, 0.729 19.8%, 1.042 23.3%, 1.13 24.5%, 1.182 25.6%, 1.201 26.7%, 1.192 27.7%, 1.156 28.8%, 0.977 32.2%, 0.925 33.4%, 0.894 34.5%, 0.882 35.6%, 0.887 36.6%, 0.907 37.7%, 1.045 42.4%, 1.069 44.5%, 1.059 46.3%, 0.979 50.9%, 0.96 53.4%, 0.966 55.3%, 1.013 59.9%, 1.024 62.3%, 0.986 71.2%, 1.008 79.9%, 0.995 88.9%, 1);
+  --bounce-easing: linear(0, 0.214 14.7%, 0.386 23.7%, 0.598 31.9%, 0.999 44.7%, 0.807 52.6%, 0.762 56%, 0.747 59.4%, 0.758 62.4%, 0.793 65.6%, 0.999 77.4%, 0.961 81.2%, 0.949 84.8%, 0.956 88%, 0.993 95.5%, 1);
+
+  /* ── Native browser UI theming ── */
+  color-scheme: light dark;
+  accent-color: light-dark(oklch(0.42 0.11 155), oklch(0.65 0.13 155));
+  scrollbar-color: light-dark(oklch(0.55 0.05 90 / 0.35), oklch(0.7 0.05 95 / 0.25)) transparent;
+
+  /* Premium warm cream palette — evokes manuscript paper */
+  --background: oklch(0.985 0.012 95);
+  --foreground: oklch(0.18 0.02 60);
+
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.18 0.02 60);
+
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.18 0.02 60);
+
+  /* Deep emerald primary — premium, scholarly */
+  --primary: oklch(0.42 0.11 155);
+  --primary-foreground: oklch(0.98 0.02 95);
+
+  /* Warm amber secondary — golden ink */
+  --secondary: oklch(0.93 0.05 85);
+  --secondary-foreground: oklch(0.30 0.04 65);
+
+  --muted: oklch(0.96 0.012 95);
+  --muted-foreground: oklch(0.50 0.02 70);
+
+  --accent: oklch(0.88 0.10 75);
+  --accent-foreground: oklch(0.25 0.05 65);
+
+  --destructive: oklch(0.55 0.20 27);
+  --border: oklch(0.90 0.015 90);
+  --input: oklch(0.94 0.01 90);
+  --ring: oklch(0.55 0.12 155);
+
+  /* Chart palette — warm earth tones + emerald */
+  --chart-1: oklch(0.55 0.13 155);  /* emerald */
+  --chart-2: oklch(0.70 0.13 75);   /* amber */
+  --chart-3: oklch(0.55 0.18 25);   /* terracotta */
+  --chart-4: oklch(0.50 0.10 305);  /* plum */
+  --chart-5: oklch(0.65 0.13 195);  /* teal */
+
+  --sidebar: oklch(0.97 0.012 95);
+  --sidebar-foreground: oklch(0.18 0.02 60);
+  --sidebar-primary: oklch(0.42 0.11 155);
+  --sidebar-primary-foreground: oklch(0.98 0.02 95);
+  --sidebar-accent: oklch(0.93 0.05 85);
+  --sidebar-accent-foreground: oklch(0.30 0.04 65);
+  --sidebar-border: oklch(0.90 0.015 90);
+  --sidebar-ring: oklch(0.55 0.12 155);
+}
+
+.dark {
+  --background: oklch(0.16 0.012 60);
+  --foreground: oklch(0.96 0.015 95);
+
+  --card: oklch(0.21 0.015 60);
+  --card-foreground: oklch(0.96 0.015 95);
+
+  --popover: oklch(0.21 0.015 60);
+  --popover-foreground: oklch(0.96 0.015 95);
+
+  --primary: oklch(0.65 0.13 155);
+  --primary-foreground: oklch(0.15 0.02 60);
+
+  --secondary: oklch(0.28 0.025 65);
+  --secondary-foreground: oklch(0.94 0.015 95);
+
+  --muted: oklch(0.25 0.012 60);
+  --muted-foreground: oklch(0.70 0.015 80);
+
+  --accent: oklch(0.40 0.10 70);
+  --accent-foreground: oklch(0.95 0.02 95);
+
+  --destructive: oklch(0.65 0.18 25);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 12%);
+  --ring: oklch(0.55 0.12 155);
+
+  --chart-1: oklch(0.65 0.13 155);
+  --chart-2: oklch(0.75 0.13 75);
+  --chart-3: oklch(0.65 0.18 25);
+  --chart-4: oklch(0.60 0.10 305);
+  --chart-5: oklch(0.70 0.13 195);
+
+  --sidebar: oklch(0.21 0.015 60);
+  --sidebar-foreground: oklch(0.96 0.015 95);
+  --sidebar-primary: oklch(0.65 0.13 155);
+  --sidebar-primary-foreground: oklch(0.15 0.02 60);
+  --sidebar-accent: oklch(0.28 0.025 65);
+  --sidebar-accent-foreground: oklch(0.94 0.015 95);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.55 0.12 155);
+
+  /* ── Override native UI for dark mode ── */
+  color-scheme: dark;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    scroll-behavior: smooth;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "kern", "liga", "calt";
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    transition: background-color 0.3s var(--spring-easing), color 0.3s var(--spring-easing), border-color 0.3s var(--spring-easing);
+  }
+  /* Arabic typography refinements */
+  [lang="ar"], .font-naskh {
+    font-feature-settings: "kern", "liga", "calt", "rlig", "rclt";
+    line-height: 1.9;
+  }
+  .font-display {
+    line-height: 1.5;
+    letter-spacing: -0.01em;
+  }
+}
+
+/* =====================================================================
+   Custom scrollbar — slim, premium
+   ===================================================================== */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: oklch(0.55 0.05 90 / 0.35);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: oklch(0.55 0.05 90 / 0.6);
+}
+.dark ::-webkit-scrollbar-thumb {
+  background: oklch(0.7 0.05 95 / 0.25);
+}
+
+/* =====================================================================
+   Streak flame animation
+   ===================================================================== */
+@keyframes flame-flicker {
+  0%, 100% { transform: scale(1) rotate(-1deg); filter: brightness(1) drop-shadow(0 0 6px oklch(0.7 0.18 50 / 0.6)); }
+  25%      { transform: scale(1.08) rotate(1deg);  filter: brightness(1.15) drop-shadow(0 0 10px oklch(0.75 0.20 50 / 0.7)); }
+  50%      { transform: scale(0.96) rotate(-0.5deg); filter: brightness(1.05) drop-shadow(0 0 8px oklch(0.7 0.18 50 / 0.65)); }
+  75%      { transform: scale(1.04) rotate(0.5deg);  filter: brightness(1.1) drop-shadow(0 0 12px oklch(0.78 0.20 50 / 0.75)); }
+}
+.flame-active {
+  animation: flame-flicker 2.4s ease-in-out infinite;
+  display: inline-block;
+}
+
+/* =====================================================================
+   Achievement confetti burst
+   ===================================================================== */
+@keyframes confetti-burst {
+  0%   { transform: translate(0, 0) scale(0.6); opacity: 0; }
+  20%  { opacity: 1; }
+  100% { transform: translate(var(--cx, 0), var(--cy, 0)) scale(1.1) rotate(720deg); opacity: 0; }
+}
+.confetti-piece {
+  animation: confetti-burst 1.4s cubic-bezier(0.22, 0.61, 0.36, 1) forwards;
+}
+
+/* =====================================================================
+   Card entrance animation
+   ===================================================================== */
+@keyframes card-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* =====================================================================
+   Offline banner slide-down
+   ===================================================================== */
+@keyframes slide-down {
+  from { opacity: 0; transform: translateY(-100%); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-slide-down {
+  animation: slide-down 0.35s var(--spring-easing) forwards;
+}
+.card-in {
+  animation: card-in 0.4s var(--spring-easing) forwards;
+}
+
+/* =====================================================================
+   Mastery ring rotation on mount
+   ===================================================================== */
+@keyframes ring-fill {
+  from { stroke-dashoffset: var(--ring-circumference); }
+  to   { stroke-dashoffset: var(--ring-offset); }
+}
+
+/* =====================================================================
+   Dialog / Modal transitions — using @starting-style + transition-behavior
+   ===================================================================== */
+
+/* ── Overlay (backdrop) ── */
+[data-slot="dialog-overlay"] {
+  opacity: 0;
+  transition: opacity 0.35s var(--spring-easing), display 0.35s allow-discrete, overlay 0.35s allow-discrete;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+[data-slot="dialog-overlay"][data-state="open"] {
+  opacity: 1;
+
+  @starting-style {
+    opacity: 0;
+  }
+}
+
+/* ── Content panel ── */
+[data-slot="dialog-content"] {
+  opacity: 0;
+  transform: scale(0.92) translateY(8px);
+  transition:
+    opacity 0.3s var(--spring-easing),
+    transform 0.4s var(--bounce-easing),
+    display 0.4s allow-discrete,
+    overlay 0.4s allow-discrete;
+}
+
+[data-slot="dialog-content"][data-state="open"] {
+  opacity: 1;
+  transform: scale(1) translateY(0);
+
+  @starting-style {
+    opacity: 0;
+    transform: scale(0.92) translateY(8px);
+  }
+}
+
+/* ── Reduced motion — simple fade only ── */
+@media (prefers-reduced-motion: reduce) {
+  [data-slot="dialog-overlay"] {
+    transition-duration: 0.1s;
+  }
+
+  [data-slot="dialog-overlay"][data-state="open"] {
+    @starting-style {
+      opacity: 0;
+    }
+  }
+
+  [data-slot="dialog-content"] {
+    transform: none;
+    transition-duration: 0.1s;
+  }
+
+  [data-slot="dialog-content"][data-state="open"] {
+    transform: none;
+
+    @starting-style {
+      opacity: 0;
+      transform: none;
+    }
+  }
+}
+
+/* =====================================================================
+   Smooth focus ring for RTL
+   ===================================================================== */
+*:focus-visible {
+  outline: 2px solid oklch(0.55 0.12 155 / 0.6);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* =====================================================================
+   Number badge — Arabic numerals fallback
+   ===================================================================== */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* =====================================================================
+   Question stem typography
+   ===================================================================== */
+.question-stem {
+  font-family: var(--font-naskh);
+  font-size: 1.25rem;
+  line-height: 2.1;
+}
+
+/* =====================================================================
+   Reading passage styling
+   ===================================================================== */
+.passage-text {
+  font-family: var(--font-naskh);
+  font-size: 1.05rem;
+  line-height: 2.2;
+  color: oklch(0.30 0.02 60);
+}
+
+/* =====================================================================
+   Hide scrollbar utility (for nav rails)
+   ===================================================================== */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* =====================================================================
+   Glass surface — for header blur
+   ===================================================================== */
+.glass {
+  background: color-mix(in oklch, var(--background) 80%, transparent);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+/* =====================================================================
+   Content-visibility: defer off-screen rendering
+   - MANDATORY: always pair content-visibility: auto with contain-intrinsic-size
+   - Apply ONLY to sections confirmed below the initial viewport fold
+   - 'auto' lets the browser remember the actual rendered size after first paint
+   ===================================================================== */
+.cv-defer {
+  content-visibility: auto;
+  contain-intrinsic-size: auto none auto 250px;
+}
+.cv-defer-sm {
+  content-visibility: auto;
+  contain-intrinsic-size: auto none auto 150px;
+}
+
+/* =====================================================================
+   View Transitions — smooth crossfade between SPA views
+   The browser captures the old DOM snapshot, runs the state update, then
+   captures the new snapshot and interpolates between them in the top layer.
+   ===================================================================== */
+
+/* Default crossfade is built-in — we just need to respect reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
+}
+
+/* Slightly faster, more polished crossfade than the browser default */
+::view-transition-old(root) {
+  animation: 200ms ease-out both fade-out;
+}
+::view-transition-new(root) {
+  animation: 250ms ease-out 50ms both fade-in;
+}
+
+@keyframes fade-out {
+  to { opacity: 0; }
+}
+@keyframes fade-in {
+  from { opacity: 0; }
+}
+
+/* =====================================================================
+   Sheet / Drawer slide transitions
+   ===================================================================== */
+[data-slot="sheet-content"] {
+  transition: transform 0.4s var(--spring-easing), opacity 0.3s var(--spring-easing);
+}
+
+/* =====================================================================
+   Sidebar width transitions
+   ===================================================================== */
+[data-slot="sidebar-wrapper"] {
+  transition: width 0.35s var(--spring-easing);
+}
+[data-slot="sidebar"] {
+  transition: width 0.35s var(--spring-easing);
+}
+
+/* =====================================================================
+   Toast / Sonner bounce entrance
+   ===================================================================== */
+
+/* Radix UI Toast — override slide-in animation timing */
+[data-state="open"][role="status"],
+[data-state="open"][role="alert"] {
+  animation-timing-function: var(--bounce-easing) !important;
+}
+
+/* Sonner — data-attribute selector (stable across versions) */
+[data-sonner-toast][data-visible="true"] {
+  animation-timing-function: var(--bounce-easing) !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-state="open"][role="status"],
+  [data-state="open"][role="alert"],
+  [data-sonner-toast][data-visible="true"] {
+    animation-timing-function: ease-out !important;
+    animation-duration: 0.15s !important;
+  }
+}
+
+/* =====================================================================
+   3D Card Flip Utilities — for Flashcards
+   ===================================================================== */
+.perspective-1000 {
+  perspective: 1000px;
+}
+.preserve-3d {
+  transform-style: preserve-3d;
+}
+.backface-hidden {
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
