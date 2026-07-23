@@ -363,6 +363,13 @@ export async function POST(request: Request) {
         } catch (e) {
           const errorMsg =
             e instanceof Error ? e.message : "حدث خطأ غير متوقع";
+          
+          // Log the error with context for monitoring
+          console.error(
+            `[AI Study Buddy] Streaming error for user ${userId}, session ${activeSessionId}:`,
+            errorMsg
+          );
+          
           const errorEvent = `data: ${JSON.stringify({ error: errorMsg })}\n\n`;
           try {
             controller.enqueue(encoder.encode(errorEvent));
@@ -382,10 +389,14 @@ export async function POST(request: Request) {
       },
     });
   } catch (e) {
+    const errorMsg = (e as Error).message;
+    
+    // Log the error with context for monitoring
     console.error(
-      "[AI Study Buddy] Gemini streaming error:",
-      (e as Error).message
+      `[AI Study Buddy] Gemini streaming initialization error for user ${userId}:`,
+      errorMsg
     );
+    
     return new Response(
       JSON.stringify({
         error:

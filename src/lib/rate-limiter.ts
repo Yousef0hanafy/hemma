@@ -51,7 +51,12 @@ class RateLimiter {
     }
 
     if (entry.count >= this.config.max) {
-      // Rate limit exceeded
+      // Rate limit exceeded - log the violation
+      console.warn(
+        `[RateLimiter] Rate limit exceeded for identifier: ${identifier}, ` +
+        `count: ${entry.count}, max: ${this.config.max}, ` +
+        `resetTime: ${new Date(entry.resetTime).toISOString()}`
+      );
       return {
         success: false,
         remaining: 0,

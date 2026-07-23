@@ -189,7 +189,13 @@ export async function POST(req: NextRequest) {
         send({ type: "done" });
       } catch (e) {
         const error = (e as Error).message;
-        console.error("[Chat Stream] Gemini error:", error);
+        
+        // Log the error with context for monitoring
+        console.error(
+          `[Studio Chat Stream] Gemini error for user ${session.user.id}:`,
+          error
+        );
+        
         send({ type: "error", error });
       } finally {
         controller.close();
