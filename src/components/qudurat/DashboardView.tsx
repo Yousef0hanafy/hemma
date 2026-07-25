@@ -81,10 +81,13 @@ export function DashboardView() {
 
   // Check for pending session on mount
   const [pendingSession, setPendingSession] = useState<PendingSession | null>(null);
+  
+  // Load pending session in an effect to avoid setState during render
   useEffect(() => {
     const saved = loadPendingExam();
     setPendingSession(saved);
   }, []);
+  
   const { data: mastery } = useCategoryMastery();
   const { data: activity } = useDailyActivity();
   const { data: quest } = useDailyQuest();
@@ -414,7 +417,7 @@ export function DashboardView() {
               className="mt-3 text-center"
             >
               <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-100 bg-white/10 rounded-full px-4 py-1.5">
-                🎉 حققت جميع أهدافك اليوم! استمر بهذا التميّز
+                🎉 حققت جميع أهدافك اليوم! استمر بهذا التميّاز
               </span>
             </motion.div>
           )}
@@ -796,60 +799,40 @@ function PendingSessionBanner({
     session.view.kind === "exam_running"
       ? session.view.questionIds.length
       : session.view.questionIds?.length ?? 0;
-  const current = session.internal.currentIndex + 1;
-  const savedTimeAgo = Math.floor((Date.now() - session.savedAt) / 60000);
-  const timeAgo =
-    savedTimeAgo < 1
-      ? "منذ لحظات"
-      : savedTimeAgo < 60
-      ? `منذ ${toArabicDigits(savedTimeAgo)} دقيقة`
-      : `منذ ${toArabicDigits(Math.floor(savedTimeAgo / 60))} ساعة`;
-
+  
   return (
     <motion.div
-      initial={{ opacity: 0, y: -8 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="rounded-2xl bg-gradient-to-bl from-violet-600 to-indigo-700 dark:from-violet-700 dark:to-indigo-800 p-4 sm:p-5 text-white shadow-lg"
+      {...fadeUp}
+      transition={{ ...springEntrance, delay: 0.06 }}
+      className="rounded-2xl bg-gradient-to-bl from-blue-600 to-cyan-700 text-white p-4 sm:p-5 shadow-lg"
     >
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex items-start gap-3 min-w-0">
-          <div className="h-10 w-10 rounded-xl bg-white/15 grid place-items-center shrink-0">
-            {session.view.kind === "exam_running" ? (
-              <Timer className="h-5 w-5" />
-            ) : (
-              <BookOpen className="h-5 w-5" />
-            )}
-          </div>
-          <div className="min-w-0">
-            <div className="font-bold mb-0.5">
-              لديك {label} غير مكتمل
-            </div>
-            <div className="text-sm text-white/80">
-              {totalQuestions > 0 && (
-                <span>
-                  السؤال {toArabicDigits(current)} من {toArabicDigits(totalQuestions)}
-                  <span className="mx-1.5 opacity-50">·</span>
-                </span>
-              )}
-              <span>{timeAgo}</span>
-            </div>
-          </div>
+      <div className="flex items-start gap-4">
+        <div className="h-12 w-12 rounded-xl bg-white/15 grid place-items-center shrink-0">
+          <Play className="h-6 w-6" />
         </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <button
-            onClick={onDismiss}
-            className="rounded-full bg-white/10 hover:bg-white/20 p-2 transition-colors"
-            aria-label="تجاهل"
-          >
-            <X className="h-4 w-4" />
-          </button>
-          <button
-            onClick={onResume}
-            className="inline-flex items-center gap-1.5 rounded-full bg-white text-violet-700 px-4 py-2 text-sm font-bold hover:bg-white/90 active:scale-95 transition-all shadow-sm"
-          >
-            <Play className="h-4 w-4 fill-current" />
-            <span>استئناف</span>
-          </button>
+        <div className="flex-1 min-w-0">
+          <div className="font-bold text-lg mb-0.5">
+            جلسة سابقة غير مكتملة
+          </div>
+          <p className="text-sm text-white/80 leading-relaxed">
+            {label} — {toArabicDigits(totalQuestions)} سؤالًا
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button
+              onClick={onResume}
+              className="inline-flex items-center gap-1.5 rounded-full bg-white text-blue-700 px-4 py-2 text-xs font-bold hover:bg-white/90 active:scale-95 transition-all shadow-sm"
+            >
+              <Play className="h-3 w-3" />
+              <span>استكمال الجلسة</span>
+            </button>
+            <button
+              onClick={onDismiss}
+              className="inline-flex items-center gap-1.5 rounded-full bg-white/10 border border-white/20 text-white px-4 py-2 text-xs font-semibold hover:bg-white/20 transition-all"
+            >
+              <X className="h-3 w-3" />
+              <span>إغلاق</span>
+            </button>
+          </div>
         </div>
       </div>
     </motion.div>
@@ -868,45 +851,38 @@ function QuickAction({
   icon: React.ReactNode;
   title: string;
   subtitle: string;
-  color: string;
+  color: "emerald" | "amber" | "rose" | "violet";
   onClick: () => void;
 }) {
+  const colorMap = {
+    emerald: "from-emerald-500 to-teal-600",
+    amber: "from-amber-500 to-orange-600",
+    rose: "from-rose-500 to-pink-600",
+    violet: "from-violet-500 to-indigo-600",
+  };
+
   return (
-    <motion.button
-      whileHover={{ y: -2, transition: springHover }}
-      whileTap={{ scale: 0.98, transition: springTap }}
+    <button
       onClick={onClick}
       className={cn(
-        "rounded-2xl border p-4 text-right transition-colors",
-        getActionCardColor(color)
+        "rounded-2xl p-4 text-white transition-all hover:scale-[1.02] active:scale-[0.98]",
+        `bg-gradient-to-br ${colorMap[color]}`
       )}
     >
-      <div className="flex items-start justify-between mb-2">
-        {icon}
+      <div className="flex items-center gap-3">
+        <div className="h-10 w-10 rounded-xl bg-white/20 grid place-items-center shrink-0">
+          {icon}
+        </div>
+        <div className="text-right flex-1">
+          <div className="font-bold text-sm">{title}</div>
+          <div className="text-xs text-white/80 mt-0.5">{subtitle}</div>
+        </div>
       </div>
-      <div className="font-semibold text-sm">{title}</div>
-      <div className="text-[11px] opacity-80 mt-0.5">{subtitle}</div>
-    </motion.button>
+    </button>
   );
 }
 
-// =====================================================================
-// Continue Learning Section
-// =====================================================================
-
-// Map category slug → Lucide icon component
-const CATEGORY_ICON_MAP: Record<string, ElementType> = {
-  verbal_analogy: Shuffle,
-  sentence_completion: AlignRight,
-  contextual_error: AlertCircle,
-  odd_word_out: Shapes,
-  reading_comprehension: BookOpen,
-};
-
-function CategoryIcon({ slug, className = "h-4 w-4" }: { slug: string; className?: string }) {
-  const Icon = CATEGORY_ICON_MAP[slug] ?? BookOpen;
-  return <Icon className={className} />;
-}
+// ---------------------------------------------------------------------------
 
 function ContinueLearningSection({
   recentCategories,
@@ -917,160 +893,66 @@ function ContinueLearningSection({
   recentCategories: RecentCategoryInfo[];
   mastery: CategoryMastery[];
   dueReviewCount: number;
-  setView: (v: ViewKey) => void;
+  setView: (view: ViewKey) => void;
 }) {
   const masteryMap = new Map(mastery.map((m) => [m.categorySlug, m]));
 
-  // Find the weakest category (lowest mastery among studied ones)
-  const studied = mastery.filter((m) => m.attempted > 0);
-  const weakest = studied.length > 0 ? [...studied].sort((a, b) => a.mastery - b.mastery)[0] : null;
-
-  return (        <motion.section
+  return (
+    <motion.div
       {...fadeUp}
       transition={{ ...springEntrance, delay: 0.35 }}
+      className="rounded-2xl bg-card border border-border p-5"
     >
-      {/* Title + due reviews badge */}
       <div className="flex items-center justify-between mb-3">
-        <div>
-          <h2 className="font-display text-xl font-bold">تابع تعلّمك</h2>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            استأنف من حيث توقّفت في كل فئة
-          </p>
-        </div>
-        {dueReviewCount > 0 && (
-          <button
-            onClick={() => setView({ kind: "revision", tab: "flashcards" })}
-            className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 text-primary px-3 py-1.5 text-xs font-semibold hover:bg-primary/20 transition-colors shrink-0"
-          >
-            <Clock className="h-3 w-3" />
-            <span>{toArabicDigits(dueReviewCount)} مراجعة</span>
-          </button>
-        )}
+        <h2 className="font-display text-xl font-bold">استمر في التعلم</h2>
+        <button
+          onClick={() => setView({ kind: "search" })}
+          className="text-xs text-primary hover:underline flex items-center gap-1"
+        >
+          <span>المزيد</span>
+          <ChevronLeft className="h-3 w-3" />
+        </button>
       </div>
 
-      {/* Horizontal-scrollable category cards */}
-      <div className="flex gap-3 overflow-x-auto pb-2 no-scrollbar -mx-1 px-1 snap-x">
-        {recentCategories.map((rc, i) => {
-          const meta = categoryMeta(rc.categorySlug);
-          const hex = getColorHex(meta.color);
-          const masteryInfo = masteryMap.get(rc.categorySlug);
-          const masteryVal = masteryInfo?.mastery ?? 0;
-
+      <div className="space-y-2">
+        {recentCategories.map((cat) => {
+          const m = masteryMap.get(cat.categorySlug);
           return (
-            <motion.button
-              key={rc.categorySlug}
-              {...slideRight}
-              transition={{ ...springEntrance, delay: 0.4 + i * 0.06 }}
-              whileHover={{ y: -3, transition: springHover }}
-              whileTap={{ scale: 0.98, transition: springTap }}
-              onClick={() => setView({ kind: "study", categorySlug: rc.categorySlug })}
-              className="flex-shrink-0 w-56 snap-start rounded-2xl bg-card border border-border hover:border-primary/40 transition-all text-right overflow-hidden group"
+            <button
+              key={cat.categorySlug}
+              onClick={() =>
+                setView({ kind: "study", categorySlug: cat.categorySlug })
+              }
+              className="w-full flex items-center gap-3 rounded-xl p-3 text-right hover:bg-muted/50 transition-colors"
             >
-              {/* Color accent bar */}
-              <div
-                className="h-1.5 w-full"
-                style={{ backgroundColor: hex.stroke }}
-              />
-
-              <div className="p-4">
-                {/* Header: icon + name */}
-                <div className="flex items-center gap-2.5 mb-3">
-                  <div className={cn("h-8 w-8 rounded-lg grid place-items-center", meta.bg)}>
-                    <CategoryIcon slug={rc.categorySlug} />
-                  </div>
-                  <div className="min-w-0 text-right">
-                    <div className="font-semibold text-sm leading-tight line-clamp-1">
-                      {rc.categoryNameAr}
-                    </div>
-                    <div className={cn("text-[10px]", meta.text)}>
-                      {masteryLabel(masteryVal)}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Mastery bar */}
-                <div className="mb-2">
-                  <div className="h-1.5 rounded-full bg-muted overflow-hidden">
-                    <motion.div
-                      className="h-full rounded-full"
-                      style={{ backgroundColor: hex.stroke }}
-                      initial={{ width: 0 }}
-                      animate={{ width: `${masteryVal}%` }}
-                      transition={{ ...springProgress, delay: 0.5 + i * 0.08 }}
-                    />
-                  </div>
-                </div>
-
-                {/* Stats row */}
-                <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-                  <span>
-                    إتقان {toArabicDigits(masteryVal)}%
-                  </span>
-                  {rc.attempted > 0 && (
-                    <span>
-                      آخر {toArabicDigits(Math.min(rc.attempted, 99))} سؤال
-                    </span>
-                  )}
-                </div>
-
-                {/* Accuracy chip with pulse animation */}
-                <div className="mt-2 flex items-center gap-1.5">
-                  <AnimatedChip
-                    pulseKey={`${rc.categorySlug}-acc-${Math.floor(rc.accuracy / 5) * 5}`}
-                    color={rc.accuracy >= 70 ? "emerald" : rc.accuracy >= 40 ? "amber" : "rose"}
-                    label={`دقة ${toArabicDigits(rc.accuracy)}٪`}
-                    size="sm"
-                    delay={0.6 + i * 0.08}
-                  />
-                </div>
-
-                {/* Hover action */}
-                <div className="mt-3 flex items-center justify-center gap-1 text-xs font-semibold text-primary opacity-0 group-hover:opacity-100 transition-opacity">
-                  <ChevronLeft className="h-3 w-3" />
-                  <span>استمر</span>
+              <div className="h-10 w-10 rounded-lg bg-primary/10 grid place-items-center shrink-0">
+                <BookOpen className="h-5 w-5 text-primary" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="font-semibold text-sm truncate">{cat.categoryNameAr}</div>
+                <div className="text-xs text-muted-foreground mt-0.5">
+                  {toArabicDigits(cat.attempted)} محاولة · {toArabicDigits(cat.accuracy)}% دقة
                 </div>
               </div>
-            </motion.button>
+              {m && (
+                <div className="text-xs font-bold tabular-nums text-primary">
+                  {masteryLabel(m.mastery)}
+                </div>
+              )}
+            </button>
           );
         })}
       </div>
 
-      {/* Recommended: weakest category */}
-      {weakest && (
-        <motion.div
-          {...fadeUp}
-          transition={{ ...springEntrance, delay: 0.55 }}
-          className="mt-3 rounded-2xl bg-gradient-to-bl from-accent/40 to-accent/10 border border-accent/30 p-4"
+      {dueReviewCount > 0 && (
+        <button
+          onClick={() => setView({ kind: "revision", tab: "flashcards" })}
+          className="mt-3 w-full flex items-center justify-center gap-2 rounded-xl bg-violet-100 dark:bg-violet-950/30 text-violet-700 dark:text-violet-300 py-2.5 text-xs font-semibold hover:bg-violet-200 dark:hover:bg-violet-950/50 transition-colors"
         >
-          <div className="flex items-start gap-3">
-            <div className="h-9 w-9 rounded-xl bg-primary/10 grid place-items-center shrink-0">
-              <Lightbulb className="h-4 w-4 text-primary" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="font-semibold text-sm mb-0.5">
-                مقترَح لك: حسّن {weakest.categoryNameAr}
-              </div>
-              <p className="text-xs text-muted-foreground leading-relaxed">
-                إتقان هذه الفئة {toArabicDigits(weakest.mastery)}% —
-                {weakest.mastery < 40
-                  ? " لا تزال في البداية. خصص حصة مذاكرة لتعزيز أساسياتك."
-                  : weakest.mastery < 65
-                  ? " تسير في الطريق الصحيح. استمر في التدريب لترفع مستواك."
-                  : " أداؤك جيّد! القليل من المراجعة كافٍ للوصول إلى الإتقان."}
-              </p>
-            </div>
-            <button
-              onClick={() =>
-                setView({ kind: "study", categorySlug: weakest.categorySlug })
-              }
-              className="inline-flex items-center gap-1 rounded-lg bg-primary text-primary-foreground px-3 py-1.5 text-xs font-semibold hover:bg-primary/90 active:scale-95 transition-all shrink-0"
-            >
-              <span>ادرسها</span>
-              <ChevronLeft className="h-3 w-3" />
-            </button>
-          </div>
-        </motion.div>
+          <RefreshCw className="h-3 w-3" />
+          <span>مراجعة {toArabicDigits(dueReviewCount)} سؤالًا مستحقًا</span>
+        </button>
       )}
-    </motion.section>
+    </motion.div>
   );
 }

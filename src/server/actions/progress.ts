@@ -617,3 +617,44 @@ export async function fetchRecentlyStudiedCategories(limit = 5) {
       accuracy: stat.attempts > 0 ? Math.round((stat.correct / stat.attempts) * 100) : 0,
     }));
 }
+
+export async function fetchWeeklyChallenge() {
+  const userId = await requirePermission("challenge", "read");
+  
+  const today = todayKey();
+  const startOfWeek = new Date(today);
+  startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay());
+  startOfWeek.setHours(0, 0, 0, 0);
+  
+  const endOfWeek = new Date(startOfWeek);
+  endOfWeek.setDate(endOfWeek.getDate() + 6);
+  endOfWeek.setHours(23, 59, 59, 999);
+  
+  // Get weekly activity
+  const weeklyActivity = await db.dailyActivity.findMany({
+    where: {
+      userBucket: userId,
+      date: {
+        gte: startOfWeek.toISOString().split('T')[0],
+        lte: endOfWeek.toISOString().split('T')[0]
+      }
+    }
+  });
+  
+  // Define weekly challenge
+  const challenge = {
+    descriptionAr: "أكمل 30 محاولة خلال هذا الأسبوع",
+    rewardLabel: "🔥 درع حماية",
+  };
+  
+  const target = 30;
+  const current = weeklyActivity.reduce((sum, activity) => sum + activity.attempts, 0);
+  const complete = current >= target;
+  
+  return {
+    challenge,
+    current,
+    target,
+    complete,
+  };
+}

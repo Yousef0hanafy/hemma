@@ -5,8 +5,6 @@ import { useCategories } from "@/lib/hooks/use-data";
 import { categoryMeta, toArabicDigits, getColorPalette, getChoiceAccentColor } from "@/lib/content/ui-helpers";
 import { cn } from "@/lib/utils";
 
-type Variant = "rich" | "simple";
-
 interface CategoryPickerProps {
   selected: string | undefined;
   onChange: (slug: string | undefined) => void;
@@ -15,7 +13,7 @@ interface CategoryPickerProps {
    * - "simple" — title + subtitle + optional accent ring (used in ExamSetupView)
    * @default "simple"
    */
-  variant?: Variant;
+  variant?: "rich" | "simple";
 }
 
 /**

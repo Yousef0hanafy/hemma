@@ -161,4 +161,37 @@ export async function fetchLibraryMeta(): Promise<LibraryMeta> {
       _count: true,
     }),
     db.question.groupBy({
-      by: ["sourceId
+      by: ["sourceId"],
+      _count: true,
+    }),
+  ]);
+
+  // Build category counts map
+  const categoryCountMap = new Map<string, number>();
+  for (const group of categoryCounts) {
+    categoryCountMap.set(group.categoryId, group._count);
+  }
+
+  // Build source counts map
+  const sourceCountMap = new Map<string, number>();
+  for (const group of sourceCounts) {
+    sourceCountMap.set(group.sourceId, group._count);
+  }
+
+  return {
+    categories: categories.map((cat) => ({
+      slug: cat.slug,
+      nameAr: cat.nameAr,
+      count: categoryCountMap.get(cat.id) ?? 0,
+    })),
+    sources: sources.map((src) => ({
+      slug: src.slug,
+      title: src.title,
+      count: sourceCountMap.get(src.id) ?? 0,
+    })),
+    statusCounts: statusGroups.map((group) => ({
+      status: group.status,
+      count: group._count,
+    })),
+  };
+}

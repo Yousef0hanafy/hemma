@@ -5,8 +5,6 @@ import { useSources } from "@/lib/hooks/use-data";
 import { toArabicDigits } from "@/lib/content/ui-helpers";
 import { cn } from "@/lib/utils";
 
-type Variant = "multi" | "single";
-
 interface MultiSelectProps {
   variant: "multi";
   selected: string[];
@@ -31,11 +29,11 @@ export function SourcePicker(props: SourcePickerProps) {
 
   if (props.variant === "multi") {
     const { selected, onChange } = props;
-    const toggleSource = (slug: string) => {
+    const toggleSource = (_slug: string) => {
       onChange(
-        selected.includes(slug)
-          ? selected.filter((s) => s !== slug)
-          : [...selected, slug]
+        selected.includes(_slug)
+          ? selected.filter((s) => s !== _slug)
+          : [...selected, _slug]
       );
     };
 
