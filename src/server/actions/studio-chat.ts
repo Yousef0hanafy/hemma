@@ -99,32 +99,54 @@ export async function sendChatMessage(
   const modelName = getAIModelName();
 
   try {
+    const systemPrompt = await buildSystemPrompt();
+
     const geminiModel = client.getGenerativeModel({
       model: modelName,
+      systemInstruction: systemPrompt,
       generationConfig: {
         temperature: 0.7,
         maxOutputTokens: 2048,
       },
     });
 
-    const systemPrompt = await buildSystemPrompt();
-
     // Build conversation history for Gemini
     const contents: Array<{ role: "user" | "model"; parts: Array<{ text: string }> }> = [];
 
-    // Add previous messages as context
-    for (const msg of history.slice(-10)) {
+    // Process history: ensure roles alternate strictly and first is user
+    const filteredHistory: Array<{ role: "user" | "model"; content: string }> = [];
+    let lastRole = "";
+    
+    // Reverse iterate to keep most recent, but keep valid chain
+    for (const msg of [...history.slice(-10)].reverse()) {
+      const msgRole = msg.role === "user" ? "user" : "model";
+      if (msgRole !== lastRole) {
+        filteredHistory.unshift({ role: msgRole, content: msg.content });
+        lastRole = msgRole;
+      }
+    }
+    
+    // Ensure the very first item is a user message
+    if (filteredHistory.length > 0 && filteredHistory[0].role !== "user") {
+      filteredHistory.shift();
+    }
+
+    for (const msg of filteredHistory) {
       contents.push({
-        role: msg.role === "user" ? "user" : "model",
+        role: msg.role,
         parts: [{ text: msg.content }],
       });
     }
 
-    // Add the new message
-    contents.push({
-      role: "user",
-      parts: [{ text: `[السياق]\n${systemPrompt}\n\n[سؤال المستخدم]\n${message}` }],
-    });
+    // Ensure we don't add another user message if the last was a user
+    if (contents.length > 0 && contents[contents.length - 1].role === "user") {
+      contents[contents.length - 1].parts.push({ text: message });
+    } else {
+      contents.push({
+        role: "user",
+        parts: [{ text: message }],
+      });
+    }
 
     const result = await geminiModel.generateContent({ contents });
     const response = result.response;

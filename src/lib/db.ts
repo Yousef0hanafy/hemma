@@ -6,8 +6,7 @@ const globalForPrisma = globalThis as unknown as {
 
 // Configure connection pooling and timeouts for production
 const prismaClientOptions = {
-  log: ['error', 'warn'],
-  // Connection pool configuration for production
+  log: ['error', 'warn'] as ('error' | 'warn')[],
   datasources: {
     db: {
       url: process.env.DATABASE_URL,

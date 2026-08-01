@@ -2,7 +2,7 @@
 
 import { db } from "@/lib/db";
 import { getUserBucket } from "@/lib/auth-utils";
-import { requireStudioAccess } from "@/lib/studio-auth";
+import { requireAuth } from "@/lib/studio-auth";
 import { levelProgress, computeMastery } from "@/lib/engine/gamification";
 import type { AchievementDTO, CategoryMastery } from "@/lib/content/dto";
 
@@ -64,7 +64,7 @@ export interface ExtendedProfile {
 export async function fetchExtendedProfile(): Promise<ExtendedProfile | null> {
   let userId: string;
   try {
-    userId = await requireStudioAccess();
+    userId = await requireAuth();
   } catch {
     return null;
   }
@@ -81,7 +81,6 @@ export async function fetchExtendedProfile(): Promise<ExtendedProfile | null> {
         email: true,
         image: true,
         role: true,
-        createdAt: true,
       },
     }),
     db.userProfile.findUnique({ where: { userBucket } }),
@@ -178,7 +177,7 @@ export async function fetchExtendedProfile(): Promise<ExtendedProfile | null> {
     email: user.email,
     image: user.image,
     role: user.role,
-    createdAt: user.createdAt.toISOString(),
+    createdAt: profile?.createdAt ? profile.createdAt.toISOString() : new Date().toISOString(),
 
     totalXp,
     level: profile?.level ?? 1,
@@ -226,26 +225,26 @@ export async function fetchExtendedProfile(): Promise<ExtendedProfile | null> {
 async function fetchCategoryMasteryData(
   userBucket: string
 ): Promise<CategoryMastery[]> {
-  const cats = await db.category.findMany({ orderBy: { displayOrder: "asc" } });
-  const totals = await db.question.groupBy({ by: ["categoryId"], _count: true });
+  const [cats, totals, userStats] = await Promise.all([
+    db.category.findMany({ orderBy: { displayOrder: "asc" } }),
+    db.question.groupBy({ by: ["categoryId"], _count: true }),
+    db.$queryRaw<{ categoryId: string; attempted: number; correct: number }[]>`
+      SELECT q."categoryId",
+             COUNT(a.id)::int AS attempted,
+             SUM(CASE WHEN a."isCorrect" THEN 1 ELSE 0 END)::int AS correct
+      FROM attempts a
+      JOIN questions q ON a."questionId" = q.id
+      WHERE a."userBucket" = ${userBucket}
+      GROUP BY q."categoryId"
+    `,
+  ]);
+
   const totalMap = new Map(totals.map((t) => [t.categoryId, t._count]));
-
-  const allAttempts = await db.attempt.findMany({
-    where: { userBucket },
-    include: { question: { select: { categoryId: true } } },
-  });
-
-  const stats: Record<string, { attempted: number; correct: number }> = {};
-  for (const a of allAttempts) {
-    const cid = a.question.categoryId;
-    stats[cid] = stats[cid] ?? { attempted: 0, correct: 0 };
-    stats[cid].attempted++;
-    if (a.isCorrect) stats[cid].correct++;
-  }
+  const statMap = new Map(userStats.map((s) => [s.categoryId, s]));
 
   return cats.map((c) => {
     const total = totalMap.get(c.id) ?? 0;
-    const s = stats[c.id] ?? { attempted: 0, correct: 0 };
+    const s = statMap.get(c.id) ?? { attempted: 0, correct: 0 };
     return {
       categorySlug: c.slug,
       categoryNameAr: c.nameAr,

@@ -77,32 +77,54 @@ export async function askStudyBuddy(
   const modelName = getAIModelName();
 
   try {
+    const systemPrompt = buildSystemPrompt();
+
     const geminiModel = client.getGenerativeModel({
       model: modelName,
+      systemInstruction: systemPrompt,
       generationConfig: {
         temperature: 0.7,
         maxOutputTokens: 2048,
       },
     });
 
-    const systemPrompt = buildSystemPrompt();
-
     // Build conversation history
     const contents: Array<{ role: "user" | "model"; parts: Array<{ text: string }> }> = [];
 
-    // Add last 8 messages for context (avoids token limits)
-    for (const msg of history.slice(-8)) {
+    // Process history: ensure roles alternate strictly and first is user
+    const filteredHistory: BuddyMessage[] = [];
+    let lastRole = "";
+    
+    // Reverse iterate to keep most recent, but keep valid chain
+    for (const msg of [...history.slice(-8)].reverse()) {
+      if (msg.role !== lastRole) {
+        filteredHistory.unshift(msg);
+        lastRole = msg.role;
+      }
+    }
+    
+    // Ensure the very first item is a user message
+    if (filteredHistory.length > 0 && filteredHistory[0].role !== "user") {
+      filteredHistory.shift();
+    }
+
+    for (const msg of filteredHistory) {
       contents.push({
         role: msg.role === "user" ? "user" : "model",
         parts: [{ text: msg.content }],
       });
     }
 
-    // Add the new question with system context
-    contents.push({
-      role: "user",
-      parts: [{ text: `[سياق المساعد]\n${systemPrompt}\n\n[سؤال الطالب]\n${message}` }],
-    });
+    // Ensure we don't add another user message if the last was a user
+    if (contents.length > 0 && contents[contents.length - 1].role === "user") {
+      // Just merge it
+      contents[contents.length - 1].parts.push({ text: message });
+    } else {
+      contents.push({
+        role: "user",
+        parts: [{ text: message }],
+      });
+    }
 
     const result = await geminiModel.generateContent({ contents });
     const text = result.response.text();

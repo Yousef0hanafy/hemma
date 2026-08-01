@@ -389,6 +389,7 @@ function FavoritesList() {
 // ---------------------------------------------------------------------------
 
 function FlashcardPlayer() {
+  const { setView } = useViewStore();
   const { data: categories } = useCategories();
   const { data: mistakeIds, loading: mistakesLoading } = useMistakeQuestionIds(100);
   const { data: dueIds, loading: dueLoading } = useDueReviewIds(100);

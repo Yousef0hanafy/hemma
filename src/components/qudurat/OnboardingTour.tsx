@@ -26,13 +26,15 @@ import {
 // Tour step configuration
 // ---------------------------------------------------------------------------
 
+import { ViewKey } from "@/lib/store/view-store";
+
 interface TourStep {
   id: string;
   icon: React.ReactNode;
   title: string;
   description: string;
   /** Optional action to navigate to a specific view when this step is shown */
-  navigateTo?: Parameters<ReturnType<typeof useViewStore>["setView"]>[0];
+  navigateTo?: ViewKey;
 }
 
 const STEPS: TourStep[] = [

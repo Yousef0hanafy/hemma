@@ -11,6 +11,7 @@ import {
   buildDifficultyPrompt,
 } from "./prompts";
 import { z } from "zod";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
 // -------------------------------------------------------------------
 // Gemini client — lazy-loaded only when needed
@@ -25,14 +26,10 @@ function getGeminiClientInternal() {
 
   if (!geminiClient) {
     try {
-      // Dynamic require so the app doesn't crash if package isn't installed
-      const { GoogleGenerativeAI } = require("@google/generative-ai") as any;
       geminiClient = new GoogleGenerativeAI(apiKey);
       return geminiClient;
-    } catch {
-      console.error(
-        "[AI Evaluator] @google/generative-ai not installed. Run: npm install @google/generative-ai"
-      );
+    } catch (e) {
+      console.error("[AI Evaluator] Failed to initialize GoogleGenerativeAI:", (e as Error).message);
       geminiInitFailed = true;
       return null;
     }
@@ -76,7 +73,7 @@ export function isAIAvailable(): boolean {
 
 const QualityCheckSchema = z.object({
   score: z.number().min(0).max(1),
-  dimensions: z.record(z.number().min(0).max(1)),
+  dimensions: z.record(z.string(), z.number().min(0).max(1)),
   weaknesses: z.array(z.string()).optional(),
   suggestions: z.array(z.string()).optional(),
 });
@@ -148,6 +145,7 @@ async function callGemini(
   try {
     const geminiModel = client.getGenerativeModel({
       model,
+      systemInstruction: systemPrompt,
       generationConfig: {
         temperature: options?.temperature ?? 0.3,
         maxOutputTokens: options?.maxTokens ?? 1024,
@@ -155,10 +153,7 @@ async function callGemini(
       },
     });
 
-    const result = await geminiModel.generateContent([
-      { text: systemPrompt },
-      { text: userPrompt },
-    ]);
+    const result = await geminiModel.generateContent(userPrompt);
 
     const response = result.response;
     return response.text();
@@ -326,5 +321,5 @@ export async function scoreQuestionWithAI(params: {
     if (aiResult) return aiResult;
   }
 
-  return heuristicScore(params);
+  return heuristicScore(params as any);
 }

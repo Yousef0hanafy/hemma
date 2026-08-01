@@ -525,13 +525,13 @@ export function DashboardView() {
                   className="h-full bg-accent-foreground/80"
                   initial={{ width: 0 }}
                   animate={{
-                    width: `${Math.min(100, (quest.current / quest.target) * 100)}%`,
+                    width: `${Math.min(100, ((quest.progress[quest.quest.metric] ?? 0) / quest.quest.target) * 100)}%`,
                   }}
                   transition={{ duration: 0.5, delay: 0.3 }}
                 />
               </div>
               <span className="text-[10px] tabular-nums text-accent-foreground/80">
-                {toArabicDigits(quest.current)}/{toArabicDigits(quest.target)}
+                {toArabicDigits(quest.progress[quest.quest.metric] ?? 0)}/{toArabicDigits(quest.quest.target)}
               </span>
             </div>
           )}

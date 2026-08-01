@@ -2,6 +2,7 @@
 
 import { motion } from "framer-motion";
 import { springEntrance, springProgress, fadeUp } from "@/lib/motion-variants";
+import type { SpeedStatDTO } from "@/lib/content/dto";
 import { useViewStore } from "@/lib/store/view-store";
 import {
   useCategoryMastery,

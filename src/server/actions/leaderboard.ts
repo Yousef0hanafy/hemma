@@ -89,9 +89,10 @@ export async function fetchLeaderboard(
   // For weekly mode, we need to re-sort by weekly XP
   let sorted = profiles.map((p, i) => {
     const user = userMap.get(p.userBucket);
+    const isMe = p.userBucket === currentUserId;
     return {
       rank: 0, // will compute after sorting
-      userId: p.userBucket,
+      userId: isMe ? p.userBucket : `user-${p.userBucket.slice(0, 8)}`,
       name: user?.name ?? null,
       image: user?.image ?? null,
       totalXp: p.totalXp,
@@ -99,7 +100,7 @@ export async function fetchLeaderboard(
       currentStreak: p.currentStreak,
       longestStreak: p.longestStreak,
       weeklyXp: weeklyXpMap.get(p.userBucket) ?? 0,
-      isMe: p.userBucket === currentUserId,
+      isMe,
     };
   });
 

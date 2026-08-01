@@ -254,7 +254,7 @@ export async function POST(req: NextRequest) {
           "انتهى وقت الاتصال بخدمة AI. حاول مرة أخرى."
         );
 
-        for await (const chunk of result.stream) {
+        for await (const chunk of (result as any).stream) {
           const text = chunk.text();
           if (text) {
             send({ type: "chunk", text });

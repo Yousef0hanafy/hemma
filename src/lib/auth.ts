@@ -6,15 +6,28 @@ import bcrypt from "bcryptjs";
 import { db } from "./db";
 
 // ── Token Revocation Store ─────────────────────────────────────
-// In production, use Redis or database-backed store
-const revokedTokens = new Set<string>();
+// Database-backed token revocation store for multi-instance support
 
-export function isTokenRevoked(jti: string): boolean {
-  return revokedTokens.has(jti);
+export async function isTokenRevoked(jti: string): Promise<boolean> {
+  try {
+    const token = await db.revokedToken.findUnique({ where: { jti } });
+    return !!token;
+  } catch {
+    return false;
+  }
 }
 
-export function revokeToken(jti: string): void {
-  revokedTokens.add(jti);
+export async function revokeToken(jti: string): Promise<void> {
+  try {
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 min TTL
+    await db.revokedToken.upsert({
+      where: { jti },
+      create: { jti, expiresAt },
+      update: { expiresAt },
+    });
+  } catch (error) {
+    console.error("[TokenRevocation] Failed to revoke token:", error);
+  }
 }
 
 // ── Role-Based Access Control ───────────────────────────────────
@@ -31,10 +44,15 @@ const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
   student: [
     { resource: "question", action: "read" },
     { resource: "attempt", action: "create" },
+    { resource: "attempt", action: "read" },
     { resource: "favorite", action: "create" },
+    { resource: "favorite", action: "read" },
     { resource: "source", action: "read" },
     { resource: "category", action: "read" },
     { resource: "review_schedule", action: "read" },
+    { resource: "review", action: "create" },
+    { resource: "review", action: "read" },
+    { resource: "challenge", action: "read" },
     { resource: "exam_session", action: "read" },
     { resource: "profile", action: "read" },
     { resource: "achievement", action: "read" },
@@ -55,6 +73,14 @@ const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     { resource: "content_review", action: "update" },
     { resource: "ai_processing", action: "create" },
     { resource: "ai_processing", action: "read" },
+    { resource: "library", action: "read" },
+    { resource: "library", action: "update" },
+    { resource: "library", action: "delete" },
+    { resource: "import", action: "read" },
+    { resource: "import", action: "create" },
+    { resource: "sources", action: "read" },
+    { resource: "sources", action: "update" },
+    { resource: "sources", action: "delete" },
   ],
   reviewer: [
     { resource: "question", action: "read" },
@@ -70,6 +96,8 @@ const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     { resource: "achievement", action: "read" },
     { resource: "content_review", action: "read" },
     { resource: "ai_processing", action: "read" },
+    { resource: "library", action: "read" },
+    { resource: "sources", action: "read" },
   ],
   admin: [
     { resource: "*", action: "create" },
@@ -156,7 +184,7 @@ export const authOptions: AuthOptions = {
   session: { strategy: "jwt" },
   secret: process.env.NEXTAUTH_SECRET,
   callbacks: {
-    async jwt({ token, user, account }) {
+    async jwt({ token, user }) {
       // Initial sign-in
       if (user) {
         token.id = user.id;
@@ -167,19 +195,34 @@ export const authOptions: AuthOptions = {
         token.accessTokenExpires = Date.now() + 15 * 60 * 1000; // 15 min
       }
 
-      // Check if token is revoked
-      if (token.jti && isTokenRevoked(token.jti as string)) {
+      // Check if token is revoked in database
+      if (token.jti && (await isTokenRevoked(token.jti as string))) {
         return {};
       }
 
-      // Return previous token if access token is still valid
+      // Live DB lookup to verify user existence and ensure fresh role
+      if (token.id) {
+        try {
+          const dbUser = await db.user.findUnique({
+            where: { id: token.id as string },
+            select: { id: true, role: true },
+          });
+
+          if (!dbUser) {
+            return {}; // User deleted or revoked
+          }
+
+          token.role = dbUser.role; // Always reflect up-to-date DB role
+        } catch {
+          // If DB is temporarily unreachable, fall back to current token role
+        }
+      }
+
+      // Return token if access token is still valid
       if (Date.now() < (token.accessTokenExpires as number)) {
         return token;
       }
 
-      // Access token has expired - try to refresh
-      // In a full implementation, this would call a refresh endpoint
-      // For now, we'll just extend the expiration
       return {
         ...token,
         accessTokenExpires: Date.now() + 15 * 60 * 1000,
@@ -187,8 +230,8 @@ export const authOptions: AuthOptions = {
     },
     async session({ session, token }) {
       if (session.user) {
-        (session.user as { id: string; role: string }).id = token.id as string;
-        (session.user as { role: string }).role = token.role as string;
+        (session.user as any).id = token.id as string;
+        (session.user as any).role = token.role as string;
       }
       return session;
     },

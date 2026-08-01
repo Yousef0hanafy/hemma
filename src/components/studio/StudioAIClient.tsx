@@ -328,13 +328,13 @@ export function StudioAIClient() {
           icon={<Gauge className="h-4 w-4 text-emerald-500" />}
           label="متوسط الجودة"
           value={
-            status?.averageQuality !== null
-              ? formatPercent(Math.round(status.averageQuality! * 100))
+            status?.averageQuality !== undefined && status.averageQuality !== null
+              ? formatPercent(Math.round(status.averageQuality * 100))
               : "—"
           }
           color="bg-emerald-50 dark:bg-emerald-950"
           subtitle={
-            status?.averageQuality !== null
+            status?.averageQuality !== undefined && status.averageQuality !== null
               ? status.averageQuality >= 0.8
                 ? "ممتاز"
                 : status.averageQuality >= 0.5

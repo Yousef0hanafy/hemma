@@ -58,7 +58,6 @@ export async function getUsers(): Promise<UserListItem[]> {
       reviews: {
         select: { id: true },
       },
-      createdAt: true,
     },
   });
 
@@ -66,7 +65,6 @@ export async function getUsers(): Promise<UserListItem[]> {
   const attemptGroups = await db.attempt.groupBy({
     by: ["userBucket"],
     _count: true,
-    _sum: { isCorrect: undefined as any },
   });
 
   // Get correct counts
@@ -85,11 +83,11 @@ export async function getUsers(): Promise<UserListItem[]> {
 
   // Get last active per user (latest attempt date)
   // Use unquoted identifiers to avoid PostgreSQL case-sensitivity with node-postgres
-  const lastActiveResults = await db.$queryRawUnsafe<{ userbucket: string; maxdate: Date }[]>(
-    `SELECT "userBucket", MAX("createdAt") as maxdate
+  const lastActiveResults = await db.$queryRaw<{ userbucket: string; maxdate: Date }[]>`
+     SELECT "userBucket" as userbucket, MAX("createdAt") as maxdate
      FROM attempts
-     GROUP BY "userBucket"`
-  );
+     GROUP BY "userBucket"
+  `;
   const lastActiveMap = new Map(
     lastActiveResults.map((r) => [r.userbucket, r.maxdate.toISOString()])
   );
@@ -114,7 +112,7 @@ export async function getUsers(): Promise<UserListItem[]> {
           : null,
       reviewsCount: u.reviews.length,
       lastActiveAt: lastActiveMap.get(u.id) ?? null,
-      createdAt: u.createdAt.toISOString(),
+      createdAt: lastActiveMap.get(u.id) ?? new Date().toISOString(),
     };
   });
 }
@@ -132,20 +130,20 @@ export async function getUsersOverview(): Promise<UsersOverview> {
       db.user.groupBy({ by: ["role"], _count: true }),
       db.attempt.count(),
       db.attempt.count({ where: { isCorrect: true } }),
-      db.$queryRawUnsafe<{ count: bigint }[]>(
-        `SELECT COUNT(DISTINCT "userBucket") as count
+      db.$queryRaw<{ count: bigint }[]>`
+         SELECT COUNT(DISTINCT "userBucket") as count
          FROM attempts
-         WHERE "createdAt" >= NOW() - INTERVAL '24 hours'`
-      ),
-      db.$queryRawUnsafe<{ count: bigint }[]>(
-        `SELECT COUNT(DISTINCT "userBucket") as count
+         WHERE "createdAt" >= NOW() - INTERVAL '24 hours'
+      `,
+      db.$queryRaw<{ count: bigint }[]>`
+         SELECT COUNT(DISTINCT "userBucket") as count
          FROM attempts
-         WHERE "createdAt" >= NOW() - INTERVAL '7 days'`
-      ),
+         WHERE "createdAt" >= NOW() - INTERVAL '7 days'
+      `,
     ]);
 
-  const activeToday = Number(todayActiveStr[0]?.count ?? 0n);
-  const activeThisWeek = Number(weekActiveStr[0]?.count ?? 0n);
+  const activeToday = Number(todayActiveStr[0]?.count ?? 0);
+  const activeThisWeek = Number(weekActiveStr[0]?.count ?? 0);
 
   return {
     totalUsers,

@@ -2,7 +2,7 @@
 
 import { db } from "@/lib/db";
 import { getUserBucket } from "@/lib/auth-utils";
-import { requireStudioAccess } from "@/lib/studio-auth";
+import { requireAuth } from "@/lib/studio-auth";
 import { computeMastery, masteryLabel } from "@/lib/engine/gamification";
 import type { CategoryMastery } from "@/lib/content/dto";
 import type { ViewKey } from "@/lib/store/view-store";
@@ -72,7 +72,7 @@ export interface StudyPlanRecommendation {
 
 export async function fetchStudyPlan(): Promise<StudyPlanRecommendation | null> {
   try {
-    await requireStudioAccess();
+    await requireAuth();
   } catch {
     return null;
   }
@@ -522,29 +522,29 @@ async function fetchRecentAttempts(
 async function fetchCategoryMastery(
   userBucket: string
 ): Promise<CategoryMastery[]> {
-  const cats = await db.category.findMany({ orderBy: { displayOrder: "asc" } });
-  const totals = await db.question.groupBy({
-    by: ["categoryId"],
-    _count: true,
-  });
+  const [cats, totals, userStats] = await Promise.all([
+    db.category.findMany({ orderBy: { displayOrder: "asc" } }),
+    db.question.groupBy({
+      by: ["categoryId"],
+      _count: true,
+    }),
+    db.$queryRaw<{ categoryId: string; attempted: number; correct: number }[]>`
+      SELECT q."categoryId",
+             COUNT(a.id)::int AS attempted,
+             SUM(CASE WHEN a."isCorrect" THEN 1 ELSE 0 END)::int AS correct
+      FROM attempts a
+      JOIN questions q ON a."questionId" = q.id
+      WHERE a."userBucket" = ${userBucket}
+      GROUP BY q."categoryId"
+    `,
+  ]);
+
   const totalMap = new Map(totals.map((t) => [t.categoryId, t._count]));
-
-  const allAttempts = await db.attempt.findMany({
-    where: { userBucket },
-    include: { question: { select: { categoryId: true } } },
-  });
-
-  const stats: Record<string, { attempted: number; correct: number }> = {};
-  for (const a of allAttempts) {
-    const cid = a.question.categoryId;
-    stats[cid] = stats[cid] ?? { attempted: 0, correct: 0 };
-    stats[cid].attempted++;
-    if (a.isCorrect) stats[cid].correct++;
-  }
+  const statMap = new Map(userStats.map((s) => [s.categoryId, s]));
 
   return cats.map((c) => {
     const total = totalMap.get(c.id) ?? 0;
-    const s = stats[c.id] ?? { attempted: 0, correct: 0 };
+    const s = statMap.get(c.id) ?? { attempted: 0, correct: 0 };
     return {
       categorySlug: c.slug,
       categoryNameAr: c.nameAr,

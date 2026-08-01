@@ -257,9 +257,11 @@ describe("dayKeyOffset", () => {
 // -------------------------------------------------------------------------
 
 describe("updateStreak", () => {
+  const refDate = new Date(2026, 6, 15); // July 15, 2026
+
   it("maintains streak if lastActive is today", () => {
-    const today = todayKey(new Date(2026, 6, 15));
-    const result = updateStreak(5, today, 2);
+    const today = todayKey(refDate);
+    const result = updateStreak(5, today, 2, refDate);
     expect(result.streak).toBe(5);
     expect(result.shields).toBe(2);
     expect(result.shieldConsumed).toBe(false);
@@ -268,7 +270,7 @@ describe("updateStreak", () => {
 
   it("increments streak if lastActive is yesterday", () => {
     const yesterday = todayKey(new Date(2026, 6, 14));
-    const result = updateStreak(5, yesterday, 2);
+    const result = updateStreak(5, yesterday, 2, refDate);
     expect(result.streak).toBe(6);
     expect(result.shields).toBe(2); // Not a 7-day milestone
     expect(result.shieldConsumed).toBe(false);
@@ -277,7 +279,7 @@ describe("updateStreak", () => {
 
   it("earns a shield when reaching day 7", () => {
     const yesterday = todayKey(new Date(2026, 6, 14));
-    const result = updateStreak(6, yesterday, 1);
+    const result = updateStreak(6, yesterday, 1, refDate);
     expect(result.streak).toBe(7);
     expect(result.shields).toBe(2); // 1 + 1 earned
     expect(result.shieldEarned).toBe(true);
@@ -285,16 +287,16 @@ describe("updateStreak", () => {
 
   it("earns a shield when reaching day 14", () => {
     const yesterday = todayKey(new Date(2026, 6, 14));
-    const result = updateStreak(13, yesterday, 0);
+    const result = updateStreak(13, yesterday, 0, refDate);
     expect(result.streak).toBe(14);
     expect(result.shields).toBe(1); // 0 + 1 earned
     expect(result.shieldEarned).toBe(true);
   });
 
   it("does NOT earn a shield on same-day visit at milestone", () => {
-    const today = todayKey(new Date(2026, 6, 15));
+    const today = todayKey(refDate);
     // Already at streak 14 and visited earlier today
-    const result = updateStreak(14, today, 1);
+    const result = updateStreak(14, today, 1, refDate);
     expect(result.streak).toBe(14);
     expect(result.shields).toBe(1);
     expect(result.shieldEarned).toBe(false);
@@ -302,7 +304,7 @@ describe("updateStreak", () => {
 
   it("consumes a shield if gap detected and shields > 0", () => {
     const oldDate = "2026-07-10";
-    const result = updateStreak(5, oldDate, 2);
+    const result = updateStreak(5, oldDate, 2, refDate);
     expect(result.streak).toBe(5);
     expect(result.shields).toBe(1);
     expect(result.shieldConsumed).toBe(true);
@@ -311,7 +313,7 @@ describe("updateStreak", () => {
 
   it("resets streak to 1 if gap detected and no shields", () => {
     const oldDate = "2026-07-10";
-    const result = updateStreak(5, oldDate, 0);
+    const result = updateStreak(5, oldDate, 0, refDate);
     expect(result.streak).toBe(1);
     expect(result.shields).toBe(0);
     expect(result.shieldConsumed).toBe(false);
@@ -320,7 +322,7 @@ describe("updateStreak", () => {
 
   it("does not consume shield if streak is 0", () => {
     const oldDate = "2026-07-10";
-    const result = updateStreak(0, oldDate, 2);
+    const result = updateStreak(0, oldDate, 2, refDate);
     expect(result.streak).toBe(1);
     expect(result.shields).toBe(2);
     expect(result.shieldConsumed).toBe(false);

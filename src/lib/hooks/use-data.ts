@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
+import { useSession } from "next-auth/react";
 
 // Re-export server action wrappers as React Query-style hooks for ergonomics
 import {
@@ -86,6 +87,10 @@ export function useServerData<T>(
   fetcher: () => Promise<T>,
   deps: unknown[] = []
 ): { data: T | null; loading: boolean; error: Error | null; refresh: () => void } {
+  const { data: session } = useSession();
+  const userId = (session?.user as any)?.id || "guest";
+  const scopedKey = `${userId}:${key}`;
+
   const [data, setData] = useState<T | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
@@ -93,7 +98,7 @@ export function useServerData<T>(
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
-    const cached = cache.get(key);
+    const cached = cache.get(scopedKey);
     if (cached && Date.now() - cached.ts < TTL) {
       setData(cached.data as T);
       setLoading(false);
@@ -101,19 +106,19 @@ export function useServerData<T>(
     }
     try {
       const result = await fetcher();
-      cache.set(key, { data: result, ts: Date.now() });
+      cache.set(scopedKey, { data: result, ts: Date.now() });
       setData(result);
     } catch (e) {
       setError(e as Error);
     } finally {
       setLoading(false);
     }
-  }, [key]);
+  }, [scopedKey]);
 
   useEffect(() => {
     load();
-    return subscribe(key, load);
-  }, [load, key, ...deps]);
+    return subscribe(scopedKey, load);
+  }, [load, scopedKey, ...deps]);
 
   return { data, loading, error, refresh: load };
 }
@@ -260,45 +265,55 @@ export function useExamSessionData(sessionId: string | null) {
 // ---------------------------------------------------------------------------
 
 export function useRecordAttempt() {
+  const { data: session } = useSession();
+  const userId = (session?.user as any)?.id || "guest";
   return useCallback(async (input: RecordAttemptInput) => {
     const result = await recordAttempt(input);
-    invalidate("mastery");
-    invalidate("recent-attempts");
-    invalidate("mistakes");
-    invalidate("daily");
-    invalidate("daily-quest");
-    invalidate("profile");
-    invalidate("recent-categories");
+    invalidate(`${userId}:mastery`);
+    invalidate(`${userId}:recent-attempts`);
+    invalidate(`${userId}:mistakes`);
+    invalidate(`${userId}:daily`);
+    invalidate(`${userId}:daily-quest`);
+    invalidate(`${userId}:profile`);
+    invalidate(`${userId}:recent-categories`);
     return result;
-  }, []);
+  }, [userId]);
 }
 
 export function useToggleFavorite() {
+  const { data: session } = useSession();
+  const userId = (session?.user as any)?.id || "guest";
   return useCallback(async (questionId: string) => {
     const result = await toggleFavorite(questionId);
-    invalidate("favorites");
+    invalidate(`${userId}:favorites`);
     return result;
-  }, []);
+  }, [userId]);
 }
 
 export function useSubmitSrsReview() {
+  const { data: session } = useSession();
+  const userId = (session?.user as any)?.id || "guest";
   return useCallback(async (questionId: string, quality: SrsQuality) => {
     const result = await submitSrsReview(questionId, quality);
-    invalidate("due-reviews");
-    invalidate("due-review-count");
+    invalidate(`${userId}:due-reviews`);
+    invalidate(`${userId}:due-review-count`);
     return result;
-  }, []);
+  }, [userId]);
 }
 
 export function useAutoRegisterMistake() {
+  const { data: session } = useSession();
+  const userId = (session?.user as any)?.id || "guest";
   return useCallback(async (questionId: string) => {
     await autoRegisterMistake(questionId);
-    invalidate("due-reviews");
-    invalidate("due-review-count");
-  }, []);
+    invalidate(`${userId}:due-reviews`);
+    invalidate(`${userId}:due-review-count`);
+  }, [userId]);
 }
 
 export function useFinalizeExam() {
+  const { data: session } = useSession();
+  const userId = (session?.user as any)?.id || "guest";
   return useCallback(
     async (
       sessionId: string,
@@ -312,12 +327,12 @@ export function useFinalizeExam() {
         selections as Record<string, "أ" | "ب" | "ج" | "د" | null>,
         actualDurationSec
       );
-      invalidate("profile");
-      invalidate("daily");
-      invalidate("daily-quest");
-      invalidate("mastery");
+      invalidate(`${userId}:profile`);
+      invalidate(`${userId}:daily`);
+      invalidate(`${userId}:daily-quest`);
+      invalidate(`${userId}:mastery`);
       return result;
     },
-    []
+    [userId]
   );
 }

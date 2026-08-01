@@ -63,6 +63,7 @@ export async function generateAIStudyPlan(
   try {
     const geminiModel = client.getGenerativeModel({
       model: modelName,
+      systemInstruction: "أنت مستشار تعليمي خبير باللغة العربية. حلّل بيانات الطالب وقدّم خطة دراسة JSON.",
       generationConfig: {
         temperature: 0.4,
         maxOutputTokens: 2048,
@@ -70,10 +71,7 @@ export async function generateAIStudyPlan(
       },
     });
 
-    const result = await geminiModel.generateContent([
-      { text: "أنت مستشار تعليمي خبير باللغة العربية. حلّل بيانات الطالب وقدّم خطة دراسة JSON." },
-      { text: prompt },
-    ]);
+    const result = await geminiModel.generateContent(prompt);
 
     const response = result.response;
     const text = response.text();

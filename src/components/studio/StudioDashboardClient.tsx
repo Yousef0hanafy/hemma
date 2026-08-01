@@ -501,6 +501,8 @@ export function StudioDashboardClient() {
 
   // ── Main view ─────────────────────────────────────────────────
 
+  if (!stats) return null;
+
   return (
     <div className="space-y-6">
       {/* Metrics grid */}

@@ -81,12 +81,11 @@ export function startSentryTransaction(
 ): { finish: () => void } | null {
   if (!process.env.SENTRY_DSN) return null;
 
-  const transaction = Sentry.startTransaction({ name, op });
-  Sentry.getCurrentScope().setSpan(transaction);
+  const span = Sentry.startInactiveSpan({ name, op });
 
   return {
     finish: () => {
-      transaction.end();
+      span?.end();
     },
   };
 }

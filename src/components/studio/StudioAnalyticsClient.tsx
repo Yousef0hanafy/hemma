@@ -225,10 +225,10 @@ export function StudioAnalyticsClient() {
         />
         <StatCard
           label="جودة AI"
-          value={overview?.avgQuality !== null ? `${Math.round(overview!.avgQuality! * 100)}%` : "—"}
+          value={overview?.avgQuality !== undefined && overview.avgQuality !== null ? `${Math.round(overview.avgQuality * 100)}%` : "—"}
           icon={<Sparkles className="h-5 w-5 text-rose-600" />}
           color="bg-rose-50 dark:bg-rose-950/30"
-          subtitle={overview?.avgQuality !== null ? (overview.avgQuality >= 0.7 ? "ممتازة" : overview.avgQuality >= 0.4 ? "جيدة" : "بحاجة تحسين") : undefined}
+          subtitle={overview?.avgQuality !== undefined && overview.avgQuality !== null ? (overview.avgQuality >= 0.7 ? "ممتازة" : overview.avgQuality >= 0.4 ? "جيدة" : "بحاجة تحسين") : undefined}
         />
       </div>
 

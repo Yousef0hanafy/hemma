@@ -234,7 +234,7 @@ export function generateExplanation(
 export function estimateDifficulty(
   stem: string,
   options: QuestionOption[]
-): Difficulty {
+): "easy" | "medium" | "hard" {
   const stemLen = stem.length;
   const avgOptionLen =
     options.reduce((acc, o) => acc + o.text.length, 0) / Math.max(options.length, 1);

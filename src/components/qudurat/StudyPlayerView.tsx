@@ -195,7 +195,7 @@ function StudyPlayerInner({
         if (!isCorrect) {
           autoRegisterMistake(current.id);
         }
-        onResult(isCorrect, result.xpEarned);
+        onResult(isCorrect);
 
         if (result.xpEarned > 0) {
           toast.success(`+${toArabicDigits(result.xpEarned)} نقطة خبرة`, {
@@ -207,9 +207,9 @@ function StudyPlayerInner({
             icon: <Trophy className="h-4 w-4 text-amber-500" />,
           });
         }
-        for (const a of result.unlockedAchievements) {
-          toast(`إنجاز جديد: ${a.nameAr}`, {
-            icon: <span className="text-lg">{a.iconAr}</span>,
+        for (const a of (result.unlockedAchievements as any[])) {
+          toast(`إنجاز جديد: ${a.nameAr ?? a}`, {
+            icon: <span className="text-lg">{a.iconAr ?? "🏆"}</span>,
           });
         }
         if (result.shieldEarned) {
@@ -221,8 +221,8 @@ function StudyPlayerInner({
 
         // ── XP milestone celebrations ──
         if (result.xpMilestonesHit && result.xpMilestonesHit.length > 0) {
-          for (const m of result.xpMilestonesHit) {
-            toast(`🎉 ${m.emoji} إنجاز ${m.name}!`, {
+          for (const m of (result.xpMilestonesHit as any[])) {
+            toast(`🎉 ${m.label ?? m.name ?? ""}!`, {
               icon: <Trophy className="h-4 w-4 text-amber-500" />,
               duration: 5000,
             });
@@ -231,8 +231,8 @@ function StudyPlayerInner({
 
         // ── Streak milestone celebration ──
         if (result.streakMilestoneHit) {
-          const sm = result.streakMilestoneHit;
-          toast(`🔥 ${sm.emoji} ${sm.name}!`, {
+          const sm = result.streakMilestoneHit as any;
+          toast(`🔥 ${sm.label ?? sm.name ?? ""}!`, {
             icon: <Trophy className="h-5 w-5 text-amber-500" />,
             duration: 6000,
           });
@@ -259,9 +259,10 @@ function StudyPlayerInner({
 
   const handleFavorite = useCallback(async () => {
     if (!current) return;
-    const newState = await toggleFavorite(current.id);
-    setLocalFavorite(newState);
-    toast(newState ? "أُضيف إلى المفضلة" : "أُزيل من المفضلة");
+    const res = await toggleFavorite(current.id);
+    const isFav = typeof res === "boolean" ? res : res.favorited;
+    setLocalFavorite(isFav);
+    toast(isFav ? "أُضيف إلى المفضلة" : "أُزيل من المفضلة");
   }, [current, toggleFavorite]);
 
   // Keyboard shortcuts

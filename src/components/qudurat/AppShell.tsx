@@ -7,6 +7,7 @@ import { AppHeader } from "./AppHeader";
 import { AppNav } from "./AppNav";
 import { MobileDrawer } from "./MobileDrawer";
 import { useViewStore } from "@/lib/store/view-store";
+import dynamic from "next/dynamic";
 import { DashboardView } from "./DashboardView";
 import { StudySetupView } from "./StudySetupView";
 import { StudyPlayerView } from "./StudyPlayerView";
@@ -14,15 +15,33 @@ import { ExamSetupView } from "./ExamSetupView";
 import { ExamRunnerView } from "./ExamRunnerView";
 import { ExamReportView } from "./ExamReportView";
 import { RevisionView } from "./RevisionView";
-import { StatsView } from "./StatsView";
-import { AchievementsView } from "./AchievementsView";
 import { SearchView } from "./SearchView";
-import { ExamHistoryView } from "./ExamHistoryView";
-import { ExamHistoryDetailView } from "./ExamHistoryDetailView";
-import { ProfileView } from "./ProfileView";
-import { StudyPlanView } from "./StudyPlanView";
-import { LeaderboardView } from "./LeaderboardView";
-import { AiStudyBuddyView } from "./AiStudyBuddyView";
+
+const StatsView = dynamic(() => import("./StatsView").then((m) => m.StatsView), {
+  loading: () => <FullScreenLoader label="جارٍ تحميل الإحصاءات…" />,
+});
+const AchievementsView = dynamic(() => import("./AchievementsView").then((m) => m.AchievementsView), {
+  loading: () => <FullScreenLoader label="جارٍ تحميل الإنجازات…" />,
+});
+const ExamHistoryView = dynamic(() => import("./ExamHistoryView").then((m) => m.ExamHistoryView), {
+  loading: () => <FullScreenLoader label="جارٍ تحميل سجل الاختبارات…" />,
+});
+const ExamHistoryDetailView = dynamic(() => import("./ExamHistoryDetailView").then((m) => m.ExamHistoryDetailView), {
+  loading: () => <FullScreenLoader label="جارٍ تحميل تفاصيل الاختبار…" />,
+});
+const ProfileView = dynamic(() => import("./ProfileView").then((m) => m.ProfileView), {
+  loading: () => <FullScreenLoader label="جارٍ تحميل الملف الشخصي…" />,
+});
+const StudyPlanView = dynamic(() => import("./StudyPlanView").then((m) => m.StudyPlanView), {
+  loading: () => <FullScreenLoader label="جارٍ تحميل خطة الدراسة…" />,
+});
+const LeaderboardView = dynamic(() => import("./LeaderboardView").then((m) => m.LeaderboardView), {
+  loading: () => <FullScreenLoader label="جارٍ تحميل لوحة الصدارة…" />,
+});
+const AiStudyBuddyView = dynamic(() => import("./AiStudyBuddyView").then((m) => m.AiStudyBuddyView), {
+  loading: () => <FullScreenLoader label="جارٍ تحميل المساعد الذكي…" />,
+});
+
 import { OnboardingTour } from "./OnboardingTour";
 import { NotificationManager } from "@/components/notifications/NotificationManager";
 import { ErrorBoundary } from "./ErrorBoundary";

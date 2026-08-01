@@ -115,6 +115,11 @@ export default function RootLayout({
         {/* Preconnect to font host for faster load */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var t=localStorage.getItem("theme");var d=t==="dark"||(!t&&window.matchMedia("(prefers-color-scheme: dark)").matches);if(d){document.documentElement.classList.add("dark")}else{document.documentElement.classList.remove("dark")}}catch(e){}})()`,
+          }}
+        />
       </head>
       <body
         className={`${cairo.variable} ${naskh.variable} font-sans antialiased bg-background text-foreground`}

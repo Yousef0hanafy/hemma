@@ -23,22 +23,31 @@ export function xpForExamSession(scorePercent: number): number {
 /** Level threshold — gentle quadratic curve.
  *  Level N requires totalXp >= 50 * N^2
  */
+export const MAX_LEVEL = 100;
+
 export function levelForXp(totalXp: number): number {
-  return Math.floor(Math.sqrt(totalXp / 50)) + 1;
+  const safeXp = Math.max(0, totalXp);
+  const lvl = Math.floor(Math.sqrt(safeXp / 50)) + 1;
+  return Math.min(MAX_LEVEL, lvl);
 }
 
 /** XP required to reach a given level. */
 export function xpForLevel(level: number): number {
-  return 50 * (level - 1) * (level - 1);
+  const safeLvl = Math.min(MAX_LEVEL, Math.max(1, level));
+  return 50 * (safeLvl - 1) * (safeLvl - 1);
 }
 
 /** Progress to next level: { current, next, pct }. */
 export function levelProgress(totalXp: number) {
-  const level = levelForXp(totalXp);
+  const safeXp = Math.max(0, totalXp);
+  const level = levelForXp(safeXp);
+  if (level >= MAX_LEVEL) {
+    return { level: MAX_LEVEL, current: safeXp, nextLevelXp: xpForLevel(MAX_LEVEL), pct: 100 };
+  }
   const cur = xpForLevel(level);
   const next = xpForLevel(level + 1);
-  const pct = next > cur ? ((totalXp - cur) / (next - cur)) * 100 : 100;
-  return { level, current: totalXp, nextLevelXp: next, pct: Math.min(100, Math.max(0, pct)) };
+  const pct = next > cur ? ((safeXp - cur) / (next - cur)) * 100 : 100;
+  return { level, current: safeXp, nextLevelXp: next, pct: Math.min(100, Math.max(0, pct)) };
 }
 
 // ---------------------------------------------------------------------------
@@ -106,13 +115,14 @@ export function dayKeyOffset(days: number, from = new Date()): string {
 export function updateStreak(
   prevStreak: number,
   prevLastActive: string | null,
-  shields: number
+  shields: number,
+  now = new Date()
 ): { streak: number; shields: number; shieldConsumed: boolean; shieldEarned: boolean } {
-  const today = todayKey();
+  const today = todayKey(now);
   if (prevLastActive === today) {
     return { streak: prevStreak, shields, shieldConsumed: false, shieldEarned: false };
   }
-  const yesterday = dayKeyOffset(1);
+  const yesterday = dayKeyOffset(1, now);
   if (prevLastActive === yesterday) {
     const newStreak = prevStreak + 1;
     // Earn a shield every 7-day streak milestone (7, 14, 21, …)

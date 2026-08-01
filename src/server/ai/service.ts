@@ -262,7 +262,7 @@ export async function getAIProcessingSummary(): Promise<{
   lowQuality: number;
   recentOperations: number;
 }> {
-  const [processed, unprocessed, qualityAgg, lowQuality, recentOps] =
+  const [processed, unprocessed, qualityAgg, lowQuality, recentOperations] =
     await Promise.all([
       db.question.count({ where: { aiProcessedAt: { not: null } } }),
       db.question.count({ where: { aiProcessedAt: null } }),

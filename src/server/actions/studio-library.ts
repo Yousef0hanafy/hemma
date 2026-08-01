@@ -143,11 +143,11 @@ export async function fetchLibraryMeta(): Promise<LibraryMeta> {
   const [categories, sources, statusGroups] = await Promise.all([
     db.category.findMany({
       orderBy: { displayOrder: "asc" },
-      select: { slug: true, nameAr: true },
+      select: { id: true, slug: true, nameAr: true },
     }),
     db.source.findMany({
       orderBy: { importedAt: "desc" },
-      select: { slug: true, title: true },
+      select: { id: true, slug: true, title: true },
     }),
     db.question.groupBy({
       by: ["status"],
@@ -194,4 +194,41 @@ export async function fetchLibraryMeta(): Promise<LibraryMeta> {
       count: group._count,
     })),
   };
+}
+
+export async function bulkUpdateStatus(ids: string[], status: string) {
+  await requirePermission("library", "update");
+  await db.question.updateMany({
+    where: { id: { in: ids } },
+    data: { status },
+  });
+  return { updated: ids.length };
+}
+
+export async function bulkUpdateCategory(ids: string[], categoryId: string) {
+  await requirePermission("library", "update");
+  await db.question.updateMany({
+    where: { id: { in: ids } },
+    data: { categoryId },
+  });
+  return { updated: ids.length };
+}
+
+export async function bulkUpdateDifficulty(ids: string[], difficulty: string) {
+  await requirePermission("library", "update");
+  await db.question.updateMany({
+    where: { id: { in: ids } },
+    data: { difficulty },
+  });
+  return { updated: ids.length };
+}
+
+export async function bulkDeleteQuestions(ids: string[]) {
+  await requirePermission("library", "delete");
+  await db.attempt.deleteMany({ where: { questionId: { in: ids } } });
+  await db.favorite.deleteMany({ where: { questionId: { in: ids } } });
+  await db.reviewSchedule.deleteMany({ where: { questionId: { in: ids } } });
+  await db.contentReview.deleteMany({ where: { questionId: { in: ids } } });
+  await db.question.deleteMany({ where: { id: { in: ids } } });
+  return { deleted: ids.length };
 }

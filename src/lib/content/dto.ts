@@ -227,3 +227,25 @@ export function toAttemptDTO(a: Attempt): AttemptDTO {
     createdAt: a.createdAt.toISOString(),
   };
 }
+
+export function toUserProfileDTO(p: {
+  userBucket: string;
+  totalXp: number;
+  level: number;
+  currentStreak: number;
+  longestStreak: number;
+  lastActiveDate: string | null;
+  streakShields: number;
+  unlockedAchievements: string;
+}): UserProfileDTO {
+  return {
+    userBucket: p.userBucket,
+    totalXp: p.totalXp,
+    level: p.level,
+    currentStreak: p.currentStreak,
+    longestStreak: p.longestStreak,
+    lastActiveDate: p.lastActiveDate,
+    streakShields: p.streakShields,
+    unlockedAchievements: JSON.parse(p.unlockedAchievements || "[]") as string[],
+  };
+}

@@ -165,7 +165,7 @@ export type ProcessingFlags = {
 export async function getSourcesProcessingStatus(): Promise<
   Record<string, ProcessingFlags>
 > {
-  await requirePermission("processing", "read");
+  await requirePermission("ai_processing", "read");
 
   const logs = await db.aIProcessingLog.findMany({
     where: {
@@ -181,6 +181,8 @@ export async function getSourcesProcessingStatus(): Promise<
   const result: Record<string, ProcessingFlags> = {};
 
   for (const log of logs) {
+    if (!log.sourceId) continue;
+
     if (!result[log.sourceId]) {
       result[log.sourceId] = {
         qualityDone: false,

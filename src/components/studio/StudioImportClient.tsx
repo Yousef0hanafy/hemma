@@ -298,7 +298,7 @@ function QuestionPreviewRow({
         <div className="flex items-center gap-2">
           <p className="text-sm line-clamp-1 flex-1">{q.stem}</p>
           {q.warning && (
-            <AlertCircle className="h-3.5 w-3.5 text-amber-500 shrink-0" title={q.warning} />
+            <AlertCircle className="h-3.5 w-3.5 text-amber-500 shrink-0" aria-label={q.warning} />
           )}
         </div>
         <div className="flex items-center gap-2 mt-1">

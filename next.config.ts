@@ -11,9 +11,9 @@ const nextConfig: NextConfig = {
   // Add your production domain here to prevent CORS errors
   experimental: {
     serverActions: {
-      allowedOrigins: [
-        // e.g. "https://hema-lms.com",
-      ],
+      allowedOrigins: process.env.NEXTAUTH_URL
+        ? [new URL(process.env.NEXTAUTH_URL).host, "*.vercel.app", "localhost:3000"]
+        : ["localhost:3000"],
     },
   },
 };

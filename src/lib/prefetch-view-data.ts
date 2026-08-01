@@ -16,8 +16,6 @@ import { setCacheValue } from "@/lib/hooks/use-data";
 import type {
   fetchUserProfile,
   fetchCategoryMastery,
-  fetchSources,
-  fetchCategories,
   fetchAchievements,
   fetchDueReviewCount,
   fetchMistakeQuestionIds,
@@ -25,8 +23,10 @@ import type {
   fetchDailyActivity,
   fetchRecentlyStudiedCategories,
   fetchWeeklyChallenge,
-  fetchLearningGoals,
 } from "@/server/actions/progress";
+
+import type { fetchSources, fetchCategories } from "@/server/actions/questions";
+import type { fetchLearningGoals } from "@/server/actions/learning-goals";
 
 import type { fetchLeaderboard } from "@/server/actions/leaderboard";
 import type { fetchExtendedProfile } from "@/server/actions/student-profile";
@@ -79,7 +79,7 @@ const VIEW_PREFETCH_MAP: Record<
   ],
   profile: [
     { key: "extended-profile", fetcher: () => import("@/server/actions/student-profile").then((m) => m.fetchExtendedProfile()) },
-    { key: "learning-goals", fetcher: () => import("@/server/actions/progress").then((m) => m.fetchLearningGoals()) },
+    { key: "learning-goals", fetcher: () => import("@/server/actions/learning-goals").then((m) => m.fetchLearningGoals()) },
   ],
   study_plan: [
     { key: "ai-study-plan", fetcher: () => import("@/server/actions/ai-study-plan").then((m) => m.fetchAIStudyPlan()) },

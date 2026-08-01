@@ -11,6 +11,7 @@ import { db } from "@/lib/db";
 export interface BuddyMessage {
   role: "user" | "assistant";
   content: string;
+  createdAt?: string | Date;
 }
 
 // ---------------------------------------------------------------------------

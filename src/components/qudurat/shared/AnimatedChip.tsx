@@ -229,7 +229,7 @@ export function AnimatedChip({
         <>
           {icon && icon}
           {label && <span>{label}</span>}
-          {value !== undefined && variant !== "stat" && (
+          {value !== undefined && (variant as string) !== "stat" && (
             <span className="tabular-nums">{toArabicDigits(value)}</span>
           )}
         </>
@@ -239,7 +239,7 @@ export function AnimatedChip({
 
   const tagProps = {
     className: cn(sizeClasses[size], variantClasses, className),
-    ...motionProps,
+    ...(motionProps as any),
   };
 
   if (onClick) {

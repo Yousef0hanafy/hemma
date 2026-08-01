@@ -105,6 +105,7 @@ export function ExamRunnerView({
       }
       const actualDurationSec = Math.floor((Date.now() - examStartTime.current) / 1000);
       await finalizeExam(sessionId, questionIds, finalSelections, actualDurationSec);
+      clearPendingExam();
       setView({
         kind: "exam_report",
         sessionId,

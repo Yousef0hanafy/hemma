@@ -31,7 +31,7 @@ const REQUIRED_ENV_VARS: EnvVar[] = [
     name: "GOOGLE_API_KEY",
     required: true,
     description: "Google Gemini API key for AI features",
-    validator: (value) => value.startsWith("AIza"),
+    validator: (value) => value.length >= 20 || value.startsWith("AIza") || value.startsWith("AQ."),
   },
 ];
 

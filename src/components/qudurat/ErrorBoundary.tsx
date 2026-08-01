@@ -53,7 +53,7 @@ export class ErrorBoundary extends Component<Props, State> {
         tags: { source: "error-boundary" },
         extra: {
           componentStack: errorInfo.componentStack,
-          componentName: extractComponentName(errorInfo.componentStack),
+          componentName: extractComponentName(errorInfo.componentStack ?? ""),
         },
       });
     } catch {

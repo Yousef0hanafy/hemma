@@ -391,7 +391,7 @@ export async function POST(request: Request) {
         let hasSentSessionId = !isNewSession; // only send sessionId once if new
 
         try {
-          for await (const chunk of streamingResult) {
+          for await (const chunk of streamingResult as AsyncIterable<any>) {
             const text = chunk.text();
             if (text) {
               fullResponse += text;

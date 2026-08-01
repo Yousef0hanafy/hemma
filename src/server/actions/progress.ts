@@ -4,9 +4,9 @@
 "use server";
 
 import { db } from "@/lib/db";
-import { requirePermission, getCurrentUserId } from "@/lib/auth";
+import { requirePermission } from "@/lib/auth";
 import { toQuestionDTO } from "@/lib/content/dto";
-import type { SrsQuality } from "@/lib/engine/srs";
+import { applySm2, type SrsQuality } from "@/lib/engine/srs";
 import { computeMastery, levelForXp, levelProgress, todayKey, dayKeyOffset, updateStreak } from "@/lib/engine/gamification";
 
 export interface RecordAttemptInput {
@@ -79,10 +79,12 @@ export async function recordAttempt(input: RecordAttemptInput) {
     },
   });
 
-  // Update streak
   const profile = await db.userProfile.findUnique({
     where: { userBucket: userId },
   });
+
+  let leveledUp = false;
+  let newLevel = profile?.level ?? 1;
 
   if (profile) {
     const streakResult = updateStreak(
@@ -91,6 +93,13 @@ export async function recordAttempt(input: RecordAttemptInput) {
       profile.streakShields
     );
 
+    const oldLevel = profile.level;
+    const computedLevel = levelForXp(profile.totalXp);
+    if (computedLevel > oldLevel) {
+      leveledUp = true;
+      newLevel = computedLevel;
+    }
+
     await db.userProfile.update({
       where: { userBucket: userId },
       data: {
@@ -98,11 +107,21 @@ export async function recordAttempt(input: RecordAttemptInput) {
         longestStreak: Math.max(profile.longestStreak, streakResult.streak),
         streakShields: streakResult.shields,
         lastActiveDate: today,
+        level: newLevel,
       },
     });
   }
 
-  return { attemptId: attempt.id };
+  return {
+    attemptId: attempt.id,
+    xpEarned,
+    leveledUp,
+    newLevel,
+    unlockedAchievements: [] as string[],
+    shieldEarned: false,
+    xpMilestonesHit: [] as Array<{ xp: number; label: string }>,
+    streakMilestoneHit: undefined as { streak: number; label: string } | undefined,
+  };
 }
 
 export async function toggleFavorite(questionId: string) {
@@ -143,47 +162,39 @@ export async function submitSrsReview(questionId: string, quality: SrsQuality) {
   });
 
   if (schedule) {
-    // Simple SM-2 implementation
-    const easiness = schedule.easiness;
-    const repetitions = schedule.repetitions;
-    let newEasiness = easiness - 0.15 + (0.1 * (5 - quality));
-    if (newEasiness < 1.3) newEasiness = 1.3;
-    
-    let newInterval;
-    if (quality >= 3) {
-      if (repetitions === 0) newInterval = 1;
-      else if (repetitions === 1) newInterval = 6;
-      else newInterval = Math.round(schedule.interval * newEasiness);
-    } else {
-      newInterval = 1;
-    }
-
-    const newRepetitions = quality >= 3 ? repetitions + 1 : 0;
-    const nextReviewAt = new Date();
-    nextReviewAt.setDate(nextReviewAt.getDate() + newInterval);
+    const { newState, nextReviewAt } = applySm2(
+      {
+        easiness: schedule.easiness,
+        interval: schedule.interval,
+        repetitions: schedule.repetitions,
+      },
+      quality
+    );
 
     await db.reviewSchedule.update({
       where: { userBucket_questionId: { userBucket: userId, questionId } },
       data: {
-        easiness: newEasiness,
-        interval: newInterval,
-        repetitions: newRepetitions,
+        easiness: newState.easiness,
+        interval: newState.interval,
+        repetitions: newState.repetitions,
         nextReviewAt,
         lastReviewedAt: new Date(),
       },
     });
   } else {
     // Create new schedule
-    const nextReviewAt = new Date();
-    nextReviewAt.setDate(nextReviewAt.getDate() + 1);
+    const { newState, nextReviewAt } = applySm2(
+      { easiness: 2.5, interval: 0, repetitions: 0 },
+      quality
+    );
     
     await db.reviewSchedule.create({
       data: {
         userBucket: userId,
         questionId,
-        easiness: 2.5,
-        interval: 1,
-        repetitions: 1,
+        easiness: newState.easiness,
+        interval: newState.interval,
+        repetitions: newState.repetitions,
         nextReviewAt,
         lastReviewedAt: new Date(),
       },
@@ -256,13 +267,13 @@ export async function finalizeExamSession(
 export async function fetchUserProfile() {
   const userId = await requirePermission("profile", "read");
   
-  const profile = await db.userProfile.findUnique({
+  let profile = await db.userProfile.findUnique({
     where: { userBucket: userId },
   });
 
   if (!profile) {
     // Create default profile if it doesn't exist
-    return await db.userProfile.create({
+    profile = await db.userProfile.create({
       data: {
         userBucket: userId,
         totalXp: 0,
@@ -274,7 +285,16 @@ export async function fetchUserProfile() {
     });
   }
 
-  return profile;
+  return {
+    userBucket: profile.userBucket,
+    totalXp: profile.totalXp,
+    level: profile.level,
+    currentStreak: profile.currentStreak,
+    longestStreak: profile.longestStreak,
+    lastActiveDate: profile.lastActiveDate,
+    streakShields: profile.streakShields,
+    unlockedAchievements: JSON.parse(profile.unlockedAchievements || "[]") as string[],
+  };
 }
 
 export async function fetchAchievements() {
@@ -285,32 +305,37 @@ export async function fetchAchievements() {
 export async function fetchCategoryMastery() {
   const userId = await requirePermission("question", "read");
   
-  const attempts = await db.attempt.findMany({
-    where: { userBucket: userId },
-    include: { question: { include: { category: true } } },
+  const [categories, totals, userStats] = await Promise.all([
+    db.category.findMany({ orderBy: { displayOrder: "asc" } }),
+    db.question.groupBy({ by: ["categoryId"], _count: true }),
+    db.$queryRaw<{ categoryId: string; attempted: number; correct: number }[]>`
+      SELECT q."categoryId",
+             COUNT(a.id)::int AS attempted,
+             SUM(CASE WHEN a."isCorrect" THEN 1 ELSE 0 END)::int AS correct
+      FROM attempts a
+      JOIN questions q ON a."questionId" = q.id
+      WHERE a."userBucket" = ${userId}
+      GROUP BY q."categoryId"
+    `,
+  ]);
+
+  const totalMap = new Map(totals.map((t) => [t.categoryId, t._count]));
+  const statMap = new Map(userStats.map((s) => [s.categoryId, s]));
+
+  return categories.map((c) => {
+    const total = totalMap.get(c.id) ?? 0;
+    const s = statMap.get(c.id) ?? { attempted: 0, correct: 0 };
+    return {
+      categorySlug: c.slug,
+      categoryNameAr: c.nameAr,
+      colorTheme: c.colorTheme,
+      icon: c.icon,
+      total,
+      attempted: s.attempted,
+      correct: s.correct,
+      mastery: computeMastery(total, s.attempted, s.correct),
+    };
   });
-
-  const categoryStats = new Map<string, { total: number; correct: number; name: string; slug: string; color: string | null; icon: string | null }>();
-
-  for (const attempt of attempts) {
-    const cat = attempt.question.category;
-    const key = cat.id;
-    const existing = categoryStats.get(key) || { total: 0, correct: 0, name: cat.nameAr, slug: cat.slug, color: cat.colorTheme, icon: cat.icon };
-    existing.total += 1;
-    if (attempt.isCorrect) existing.correct += 1;
-    categoryStats.set(key, existing);
-  }
-
-  return Array.from(categoryStats.values()).map(stat => ({
-    categorySlug: stat.slug,
-    categoryNameAr: stat.name,
-    colorTheme: stat.color,
-    icon: stat.icon,
-    total: stat.total,
-    attempted: stat.total,
-    correct: stat.correct,
-    mastery: computeMastery(stat.total, stat.total, stat.correct),
-  }));
 }
 
 export async function fetchRecentAttempts(limit = 20) {
@@ -326,9 +351,9 @@ export async function fetchRecentAttempts(limit = 20) {
   return attempts.map(a => ({
     id: a.id,
     questionId: a.questionId,
-    selectedKey: a.selectedKey,
+    selectedKey: a.selectedKey as any,
     isCorrect: a.isCorrect,
-    mode: a.mode,
+    mode: a.mode as any,
     sessionId: a.sessionId,
     timeMs: a.timeMs,
     confidence: a.confidence,
@@ -388,12 +413,26 @@ export async function fetchDailyQuestProgress() {
     { slug: "q30_xp", target: 30, metric: "xp" as const, descriptionAr: "اكسب 30 نقطة خبرة" },
   ];
 
-  const currentQuest = quests[0]; // Simple selection for now
+  const dayOfYear = Math.floor(new Date().getTime() / 86400000);
+  let userHash = 0;
+  for (let i = 0; i < userId.length; i++) {
+    userHash += userId.charCodeAt(i);
+  }
+  const questIndex = (dayOfYear + userHash) % quests.length;
+  const currentQuest = quests[questIndex];
+
+  let categoriesCount = 0;
+  if (activity?.categoryStats) {
+    try {
+      categoriesCount = Object.keys(JSON.parse(activity.categoryStats)).length;
+    } catch {}
+  }
 
   const progress = {
     attempts: activity?.attempts ?? 0,
     correct: activity?.correct ?? 0,
     xp: activity?.xpEarned ?? 0,
+    categories: categoriesCount,
   };
 
   return {
@@ -423,19 +462,36 @@ export async function fetchExamHistory() {
     take: 20,
   });
 
+  const allQuestionIds = new Set<string>();
+  sessions.forEach(s => {
+    const qids = JSON.parse(s.questionIds) as string[];
+    qids.forEach(id => allQuestionIds.add(id));
+  });
+
+  const questions = await db.question.findMany({
+    where: { id: { in: Array.from(allQuestionIds) } },
+    select: { id: true, correctKey: true }
+  });
+
+  const correctKeys = new Map(questions.map(q => [q.id, q.correctKey]));
+
   return sessions.map(s => {
     const questionIds = JSON.parse(s.questionIds) as string[];
     const selections = JSON.parse(s.selections) as Record<string, string | null>;
     
     let correct = 0;
+    let wrong = 0;
+    let skipped = 0;
     let total = questionIds.length;
     
     for (const qid of questionIds) {
       const selection = selections[qid];
-      if (selection) {
-        // We'd need to check against actual correct answers here
-        // For now, we'll just count non-null selections
-        correct += 1;
+      if (!selection) {
+        skipped++;
+      } else if (selection === correctKeys.get(qid)) {
+        correct++;
+      } else {
+        wrong++;
       }
     }
 
@@ -444,8 +500,8 @@ export async function fetchExamHistory() {
       date: s.createdAt.toISOString(),
       total,
       correct,
-      wrong: total - correct,
-      skipped: 0,
+      wrong,
+      skipped,
       scorePercent: total > 0 ? Math.round((correct / total) * 100) : 0,
       durationSec: s.durationSec,
     };
@@ -544,78 +600,80 @@ export async function fetchTodayReviewCount() {
 export async function fetchSpeedStats() {
   const userId = await requirePermission("attempt", "read");
   
-  const attempts = await db.attempt.findMany({
-    where: { 
-      userBucket: userId,
-      timeMs: { gt: 0 }
-    },
-    include: { question: { include: { category: true } } },
+  const stats = await db.$queryRaw<{ categoryId: string; avgTimeMs: number; count: number }[]>`
+    SELECT q."categoryId",
+           AVG(a."timeMs")::int AS "avgTimeMs",
+           COUNT(a.id)::int AS count
+    FROM attempts a
+    JOIN questions q ON a."questionId" = q.id
+    WHERE a."userBucket" = ${userId} AND a."timeMs" > 0
+    GROUP BY q."categoryId"
+  `;
+
+  if (stats.length === 0) return [];
+
+  const categoryIds = stats.map(s => s.categoryId);
+  const categories = await db.category.findMany({
+    where: { id: { in: categoryIds } }
   });
+  
+  const catMap = new Map(categories.map(c => [c.id, c]));
 
-  const categoryStats = new Map<string, { times: number[]; name: string; slug: string; color: string | null }>();
-
-  for (const attempt of attempts) {
-    const cat = attempt.question.category;
-    const key = cat.id;
-    const existing = categoryStats.get(key) || { times: [], name: cat.nameAr, slug: cat.slug, color: cat.colorTheme };
-    existing.times.push(attempt.timeMs);
-    categoryStats.set(key, existing);
-  }
-
-  return Array.from(categoryStats.values()).map(stat => ({
-    categorySlug: stat.slug,
-    categoryNameAr: stat.name,
-    colorTheme: stat.color,
-    attempted: stat.times.length,
-    avgTimeSec: stat.times.length > 0 ? Math.round(stat.times.reduce((a, b) => a + b, 0) / stat.times.length / 1000) : 0,
-  }));
+  return stats.map(stat => {
+    const cat = catMap.get(stat.categoryId);
+    return {
+      categorySlug: cat?.slug || "",
+      categoryNameAr: cat?.nameAr || "",
+      colorTheme: cat?.colorTheme || null,
+      attempted: stat.count,
+      avgTimeSec: Math.round(stat.avgTimeMs / 1000),
+    };
+  });
 }
 
 export async function fetchRecentlyStudiedCategories(limit = 5) {
   const userId = await requirePermission("attempt", "read");
   
-  const recentAttempts = await db.attempt.findMany({
-    where: { userBucket: userId },
-    orderBy: { createdAt: "desc" },
-    take: 100,
-    include: { question: { include: { category: true } } },
+  const stats = await db.$queryRaw<{ categoryId: string; attempts: number; correct: number; lastAttempt: Date }[]>`
+    WITH recent_attempts AS (
+      SELECT a.id, a."questionId", a."isCorrect", a."createdAt"
+      FROM attempts a
+      WHERE a."userBucket" = ${userId}
+      ORDER BY a."createdAt" DESC
+      LIMIT 100
+    )
+    SELECT q."categoryId",
+           COUNT(r.id)::int AS attempts,
+           SUM(CASE WHEN r."isCorrect" THEN 1 ELSE 0 END)::int AS correct,
+           MAX(r."createdAt") AS "lastAttempt"
+    FROM recent_attempts r
+    JOIN questions q ON r."questionId" = q.id
+    GROUP BY q."categoryId"
+    ORDER BY "lastAttempt" DESC
+  `;
+
+  if (stats.length === 0) return [];
+
+  const categoryIds = stats.slice(0, limit).map(s => s.categoryId);
+  const categories = await db.category.findMany({
+    where: { id: { in: categoryIds } }
   });
+  
+  const catMap = new Map(categories.map(c => [c.id, c]));
 
-  const categoryMap = new Map<string, { name: string; slug: string; color: string | null; icon: string | null; attempts: number; correct: number; lastAttempt: string }>();
-
-  for (const attempt of recentAttempts) {
-    const cat = attempt.question.category;
-    const key = cat.id;
-    const existing = categoryMap.get(key) || { 
-      name: cat.nameAr, 
-      slug: cat.slug, 
-      color: cat.colorTheme, 
-      icon: cat.icon,
-      attempts: 0, 
-      correct: 0, 
-      lastAttempt: attempt.createdAt.toISOString() 
-    };
-    existing.attempts += 1;
-    if (attempt.isCorrect) existing.correct += 1;
-    if (attempt.createdAt.toISOString() > existing.lastAttempt) {
-      existing.lastAttempt = attempt.createdAt.toISOString();
-    }
-    categoryMap.set(key, existing);
-  }
-
-  return Array.from(categoryMap.values())
-    .sort((a, b) => new Date(b.lastAttempt).getTime() - new Date(a.lastAttempt).getTime())
-    .slice(0, limit)
-    .map(stat => ({
-      categorySlug: stat.slug,
-      categoryNameAr: stat.name,
-      colorTheme: stat.color,
-      icon: stat.icon,
-      lastAttemptAt: stat.lastAttempt,
+  return stats.slice(0, limit).map(stat => {
+    const cat = catMap.get(stat.categoryId);
+    return {
+      categorySlug: cat?.slug || "",
+      categoryNameAr: cat?.nameAr || "",
+      colorTheme: cat?.colorTheme || null,
+      icon: cat?.icon || null,
+      lastAttemptAt: stat.lastAttempt.toISOString(),
       attempted: stat.attempts,
       correct: stat.correct,
       accuracy: stat.attempts > 0 ? Math.round((stat.correct / stat.attempts) * 100) : 0,
-    }));
+    };
+  });
 }
 
 export async function fetchWeeklyChallenge() {
