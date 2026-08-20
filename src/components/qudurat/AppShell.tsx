@@ -102,7 +102,7 @@ export function AppShell() {
       {isAuthenticated && <AppNav onDrawerToggle={() => setDrawerOpen(!drawerOpen)} />}
 
       <main
-        className={`flex-1 mx-auto w-full max-w-6xl px-4 py-6 ${isAuthenticated ? "lg:ps-64" : ""}`}
+        className={`flex-1 mx-auto w-full max-w-6xl px-4 py-6 pb-20 lg:pb-6 ${isAuthenticated ? "lg:ps-64" : ""}`}
       >
         <ErrorBoundary>
           <Suspense fallback={<FullScreenLoader label="جارٍ تحميل المحتوى…" />}>

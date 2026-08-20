@@ -452,7 +452,7 @@ export function StudioAuditClient() {
           >
             <RefreshCw
               className={cn(
-                "h-4 w-4 ml-2",
+                "h-4 w-4 me-2",
                 auditQ.isFetching && "animate-spin"
               )}
             />
@@ -488,7 +488,7 @@ export function StudioAuditClient() {
         <div className="flex items-center gap-2">
           {hasActiveFilters && (
             <Button variant="ghost" size="sm" onClick={handleResetFilters}>
-              <XCircle className="h-4 w-4 ml-1.5" />
+              <XCircle className="h-4 w-4 me-1.5" />
               إلغاء الفلاتر
             </Button>
           )}
@@ -500,7 +500,7 @@ export function StudioAuditClient() {
           >
             <RefreshCw
               className={cn(
-                "h-4 w-4 ml-2",
+                "h-4 w-4 me-2",
                 auditQ.isFetching && "animate-spin"
               )}
             />
@@ -805,10 +805,10 @@ export function StudioAuditClient() {
                   </TableHead>
                   <TableHead className="text-xs">المصدر</TableHead>
                   <TableHead className="text-xs">الملخص</TableHead>
-                  <TableHead className="w-[80px] text-xs text-left">
+                  <TableHead className="w-[80px] text-xs text-start">
                     المدة
                   </TableHead>
-                  <TableHead className="w-[100px] text-xs text-left">
+                  <TableHead className="w-[100px] text-xs text-start">
                     التاريخ
                   </TableHead>
                   <TableHead className="w-8" />
@@ -857,10 +857,10 @@ export function StudioAuditClient() {
                             <span className="text-muted-foreground/50">—</span>
                           )}
                         </TableCell>
-                        <TableCell className="py-2.5 text-xs tabular-nums text-muted-foreground text-left">
+                        <TableCell className="py-2.5 text-xs tabular-nums text-muted-foreground text-start">
                           {entry.durationLabel}
                         </TableCell>
-                        <TableCell className="py-2.5 text-xs text-muted-foreground text-left whitespace-nowrap">
+                        <TableCell className="py-2.5 text-xs text-muted-foreground text-start whitespace-nowrap">
                           {relativeTimeAr(entry.createdAt)}
                         </TableCell>
                         <TableCell className="py-2.5">

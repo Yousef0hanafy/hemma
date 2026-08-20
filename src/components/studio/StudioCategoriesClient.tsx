@@ -383,7 +383,7 @@ export function StudioCategoriesClient() {
           </p>
         </div>
         <Button onClick={() => setShowNewDialog(true)}>
-          <Plus className="h-4 w-4 ml-1" />
+          <Plus className="h-4 w-4 me-1" />
           إضافة تصنيف
         </Button>
       </div>

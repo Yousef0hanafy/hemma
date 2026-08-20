@@ -1,7 +1,8 @@
 "use server";
 
+import { db } from "@/lib/db";
 import { getUserBucket } from "@/lib/auth-utils";
-import { getGeminiClient, getAIModelName, isAIAvailable } from "@/server/ai/evaluator";
+import { getGeminiClient, getAIModelName } from "@/server/ai/evaluator";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -13,7 +14,7 @@ export interface BuddyMessage {
 }
 
 export type BuddyResult =
-  | { ok: true; response: string }
+  | { ok: true; response: string; sessionId?: string }
   | { ok: false; error: string };
 
 // ---------------------------------------------------------------------------
@@ -54,10 +55,12 @@ function buildSystemPrompt(): string {
 
 export async function askStudyBuddy(
   history: BuddyMessage[],
-  message: string
+  message: string,
+  sessionId?: string
 ): Promise<BuddyResult> {
+  let userId: string;
   try {
-    await getUserBucket();
+    userId = await getUserBucket();
   } catch {
     return { ok: false, error: "يجب تسجيل الدخول أولاً" };
   }
@@ -66,7 +69,7 @@ export async function askStudyBuddy(
   if (!client) {
     return {
       ok: false,
-      error: "مساعد AI غير متاح حالياً. تأكد من ضبط مفتاح Google Gemini في الإعدادات.",
+      error: "مساعد AI غير متاح حالياً. تأكد من ضبط مفتاح OpenRouter في الإعدادات.",
     };
   }
 
@@ -77,6 +80,42 @@ export async function askStudyBuddy(
   const modelName = getAIModelName();
 
   try {
+    let activeSessionId = sessionId;
+    let verifiedHistory: BuddyMessage[] = [];
+
+    if (activeSessionId) {
+      // Validate user owns this session and load verified messages
+      const session = await db.chatSession.findUnique({
+        where: { id: activeSessionId },
+        select: { userId: true },
+      });
+
+      if (session && session.userId === userId) {
+        const dbMsgs = await db.chatMessage.findMany({
+          where: { sessionId: activeSessionId },
+          orderBy: { createdAt: "desc" },
+          take: 8,
+          select: { role: true, content: true },
+        });
+        verifiedHistory = dbMsgs.reverse().map((m) => ({
+          role: m.role as "user" | "assistant",
+          content: m.content,
+        }));
+      }
+    }
+
+    // Fallback to sanitized client history if no session history
+    if (verifiedHistory.length === 0 && history && history.length > 0) {
+      for (const msg of history.slice(-8)) {
+        if (msg && typeof msg.content === "string") {
+          verifiedHistory.push({
+            role: msg.role === "assistant" ? "assistant" : "user",
+            content: msg.content.slice(0, 2000),
+          });
+        }
+      }
+    }
+
     const systemPrompt = buildSystemPrompt();
 
     const geminiModel = client.getGenerativeModel({
@@ -88,43 +127,19 @@ export async function askStudyBuddy(
       },
     });
 
-    // Build conversation history
     const contents: Array<{ role: "user" | "model"; parts: Array<{ text: string }> }> = [];
 
-    // Process history: ensure roles alternate strictly and first is user
-    const filteredHistory: BuddyMessage[] = [];
-    let lastRole = "";
-    
-    // Reverse iterate to keep most recent, but keep valid chain
-    for (const msg of [...history.slice(-8)].reverse()) {
-      if (msg.role !== lastRole) {
-        filteredHistory.unshift(msg);
-        lastRole = msg.role;
-      }
-    }
-    
-    // Ensure the very first item is a user message
-    if (filteredHistory.length > 0 && filteredHistory[0].role !== "user") {
-      filteredHistory.shift();
-    }
-
-    for (const msg of filteredHistory) {
+    for (const msg of verifiedHistory) {
       contents.push({
         role: msg.role === "user" ? "user" : "model",
         parts: [{ text: msg.content }],
       });
     }
 
-    // Ensure we don't add another user message if the last was a user
-    if (contents.length > 0 && contents[contents.length - 1].role === "user") {
-      // Just merge it
-      contents[contents.length - 1].parts.push({ text: message });
-    } else {
-      contents.push({
-        role: "user",
-        parts: [{ text: message }],
-      });
-    }
+    contents.push({
+      role: "user",
+      parts: [{ text: message }],
+    });
 
     const result = await geminiModel.generateContent({ contents });
     const text = result.response.text();
@@ -133,9 +148,23 @@ export async function askStudyBuddy(
       return { ok: false, error: "لم يتم الحصول على رد. حاول مرة أخرى." };
     }
 
-    return { ok: true, response: text };
+    // Persist messages if a session is attached
+    if (activeSessionId) {
+      await db.chatMessage.createMany({
+        data: [
+          { sessionId: activeSessionId, role: "user", content: message },
+          { sessionId: activeSessionId, role: "assistant", content: text },
+        ],
+      });
+      await db.chatSession.update({
+        where: { id: activeSessionId },
+        data: { updatedAt: new Date() },
+      });
+    }
+
+    return { ok: true, response: text, sessionId: activeSessionId };
   } catch (e) {
-    console.error("[AI Study Buddy] Gemini error:", (e as Error).message);
+    console.error("[AI Study Buddy] OpenRouter error:", (e as Error).message);
     return { ok: false, error: "حدث خطأ في الاتصال. حاول مرة أخرى." };
   }
 }

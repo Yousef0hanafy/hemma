@@ -157,6 +157,7 @@ export function AppNav({ onDrawerToggle }: { onDrawerToggle?: () => void }) {
       <nav
         className="lg:hidden fixed bottom-0 inset-x-0 z-40 glass border-t border-border/60"
         aria-label="التنقل الرئيسي"
+        style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
       >
         <div className="mx-auto max-w-md px-2 py-1 flex items-center justify-around">
           {CORE_ITEMS.map((item) => {

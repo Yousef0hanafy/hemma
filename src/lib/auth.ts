@@ -11,7 +11,11 @@ import { db } from "./db";
 export async function isTokenRevoked(jti: string): Promise<boolean> {
   try {
     const token = await db.revokedToken.findUnique({ where: { jti } });
-    return !!token;
+    if (!token) return false;
+    if (token.expiresAt && token.expiresAt < new Date()) {
+      return false; // Expired revocation entry
+    }
+    return true;
   } catch {
     return false;
   }
@@ -180,8 +184,10 @@ function buildProviders() {
 export const authOptions: AuthOptions = {
   adapter: PrismaAdapter(db),
   providers: buildProviders(),
-  // JWT strategy with refresh token rotation
-  session: { strategy: "jwt" },
+  session: {
+    strategy: "jwt",
+    maxAge: 30 * 24 * 60 * 60, // 30 days maximum session lifespan
+  },
   secret: process.env.NEXTAUTH_SECRET,
   callbacks: {
     async jwt({ token, user }) {
@@ -209,12 +215,14 @@ export const authOptions: AuthOptions = {
           });
 
           if (!dbUser) {
-            return {}; // User deleted or revoked
+            return {}; // User deleted or deactivated -> fail closed
           }
 
           token.role = dbUser.role; // Always reflect up-to-date DB role
-        } catch {
-          // If DB is temporarily unreachable, fall back to current token role
+        } catch (error) {
+          // Fail-closed on database connection/lookup errors to prevent unauthorized role escalation
+          console.error("[Auth] Database error verifying user session:", error);
+          return {};
         }
       }
 

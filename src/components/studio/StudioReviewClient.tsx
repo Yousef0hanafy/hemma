@@ -9,7 +9,8 @@ import {
   Send,
   Sparkles,
   ChevronLeft,
-  ArrowLeft,
+  ChevronRight,
+  ArrowRight,
   Clock,
   ThumbsUp,
   ThumbsDown,
@@ -130,7 +131,7 @@ function ReviewMode({
       {/* Top bar */}
       <div className="flex items-center justify-between">
         <Button variant="ghost" size="sm" onClick={onBack}>
-          <ArrowLeft className="h-4 w-4 ml-1" />
+          <ArrowRight className="h-4 w-4 me-1" />
           العودة للقائمة
         </Button>
         <span className="text-xs text-muted-foreground tabular-nums">
@@ -198,7 +199,7 @@ function ReviewMode({
                   </span>
                   <span>{opt.text}</span>
                   {isCorrect && (
-                    <CheckCircle2 className="h-4 w-4 text-emerald-500 mr-auto" />
+                    <CheckCircle2 className="h-4 w-4 text-emerald-500 ms-auto" />
                   )}
                 </div>
               );
@@ -285,7 +286,7 @@ function ReviewMode({
                         : "طلب تعديل"}
                       {rev.notes && `: ${rev.notes}`}
                     </span>
-                    <span className="mr-auto">
+                    <span className="ms-auto">
                       {relativeTimeAr(rev.createdAt.toISOString())}
                     </span>
                   </div>
@@ -315,7 +316,7 @@ function ReviewMode({
         >
           <ThumbsDown className="h-4 w-4" />
           <span>رفض</span>
-          <kbd className="mr-2 rounded border border-rose-300 dark:border-rose-800 px-1.5 py-0.5 text-[10px]">
+          <kbd className="ms-2 rounded border border-rose-300 dark:border-rose-800 px-1.5 py-0.5 text-[10px]">
             1
           </kbd>
         </button>
@@ -326,14 +327,14 @@ function ReviewMode({
         >
           <ThumbsUp className="h-4 w-4" />
           <span>اعتماد</span>
-          <kbd className="mr-2 rounded border border-emerald-300 dark:border-emerald-800 px-1.5 py-0.5 text-[10px]">
+          <kbd className="ms-2 rounded border border-emerald-300 dark:border-emerald-800 px-1.5 py-0.5 text-[10px]">
             2
           </kbd>
         </button>
         <Button onClick={onApprovePublish} disabled={submitting} className="h-11 px-5">
-          <Send className="h-4 w-4 ml-1" />
+          <Send className="h-4 w-4 me-1" />
           <span>اعتماد ونشر</span>
-          <kbd className="mr-2 rounded bg-white/20 px-1.5 py-0.5 text-[10px]">
+          <kbd className="ms-2 rounded bg-white/20 px-1.5 py-0.5 text-[10px]">
             3
           </kbd>
         </Button>
@@ -341,7 +342,7 @@ function ReviewMode({
 
       {/* Navigation hint */}
       <div className="text-center text-[10px] text-muted-foreground">
-        ←  السابق · التالي →
+        → السابق &middot; التالي ←
       </div>
     </div>
   );

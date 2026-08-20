@@ -10,7 +10,7 @@ import {
   Upload,
   AlertCircle,
   AlertTriangle,
-  ArrowLeft,
+  ArrowRight,
   FileText,
   BookOpen,
   BarChart3,
@@ -254,7 +254,7 @@ function QualityDistributionBlock({ qualities }: { qualities: QualityDistributio
             transition={{ delay: i * 0.05, duration: 0.25 }}
             className="flex items-center gap-3"
           >
-            <span className="text-xs text-muted-foreground w-20 shrink-0 text-left">
+            <span className="text-xs text-muted-foreground w-20 shrink-0 text-start">
               {q.label}
             </span>
             <div className="flex-1 h-5 bg-muted rounded-full overflow-hidden">
@@ -627,7 +627,7 @@ export function StudioDashboardClient() {
               <Button variant="ghost" size="sm" className="text-xs h-7" asChild>
                 <Link href="/studio/review" className="flex items-center gap-1">
                   عرض الكل
-                  <ArrowLeft className="h-3 w-3" />
+                  <ArrowRight className="h-3 w-3" />
                 </Link>
               </Button>
             </div>
@@ -651,7 +651,7 @@ export function StudioDashboardClient() {
               <Button variant="ghost" size="sm" className="text-xs h-7" asChild>
                 <Link href="/studio/import" className="flex items-center gap-1">
                   عرض الكل
-                  <ArrowLeft className="h-3 w-3" />
+                  <ArrowRight className="h-3 w-3" />
                 </Link>
               </Button>
             </div>

@@ -17,12 +17,17 @@ datasource db {
 // CONTENT MODELS — source files, categories, questions, passages
 // ---------------------------------------------------------------------
 
-/// A single imported JSON file (e.g. question_set_1.json)
+/// An ingested educational source file (PDF, DOCX, TXT, JSON)
 model Source {
   id               String            @id @default(cuid())
   slug             String            @unique
   title            String
   date             String?
+  originalFilename String?
+  fileUrl          String?
+  mimeType         String?
+  sourceType       String            @default("document") // document | legacy_json
+  status           String            @default("review")   // processing | review | published | failed
   importedAt       DateTime          @default(now())
   questionCount    Int               @default(0)
   metadata         String            @default("{}")
@@ -107,6 +112,7 @@ model Question {
 model Attempt {
   id          String   @id @default(cuid())
   userBucket  String   @default("default")
+  user        User     @relation(fields: [userBucket], references: [id], onDelete: Cascade)
   questionId  String
   question    Question @relation(fields: [questionId], references: [id])
   selectedKey String?
@@ -128,6 +134,7 @@ model Attempt {
 model Favorite {
   id         String   @id @default(cuid())
   userBucket String   @default("default")
+  user       User     @relation(fields: [userBucket], references: [id], onDelete: Cascade)
   questionId String
   question   Question @relation(fields: [questionId], references: [id])
   note       String?
@@ -140,6 +147,7 @@ model Favorite {
 model DailyActivity {
   id            String @id @default(cuid())
   userBucket    String @default("default")
+  user          User   @relation(fields: [userBucket], references: [id], onDelete: Cascade)
   date          String
   attempts      Int    @default(0)
   correct       Int    @default(0)
@@ -154,6 +162,7 @@ model DailyActivity {
 model UserProfile {
   id                   String   @id @default(cuid())
   userBucket           String   @unique @default("default")
+  user                 User     @relation(fields: [userBucket], references: [id], onDelete: Cascade)
   totalXp              Int      @default(0)
   level                Int      @default(1)
   currentStreak        Int      @default(0)
@@ -190,6 +199,7 @@ model ExamSessionData {
   id                String   @id @default(cuid())
   sessionId         String   @unique
   userBucket        String
+  user              User     @relation(fields: [userBucket], references: [id], onDelete: Cascade)
   questionIds       String // JSON array of question IDs
   selections        String // JSON object: questionId → selected key or null
   durationSec       Int      @default(0)
@@ -207,6 +217,7 @@ model ExamSessionData {
 model ReviewSchedule {
   id             String    @id @default(cuid())
   userBucket     String
+  user           User      @relation(fields: [userBucket], references: [id], onDelete: Cascade)
   questionId     String
   question       Question  @relation(fields: [questionId], references: [id])
   easiness       Float     @default(2.5)
@@ -269,6 +280,7 @@ model AIProcessingLog {
 model LearningGoal {
   id         String   @id @default(cuid())
   userBucket String
+  user       User     @relation(fields: [userBucket], references: [id], onDelete: Cascade)
   type       String // "attempts" | "correct" | "xp"
   target     Int // daily target quantity
   label      String? // optional custom label
@@ -378,17 +390,25 @@ model Session {
 }
 
 model User {
-  id            String          @id @default(cuid())
-  name          String?
-  email         String?         @unique
-  emailVerified DateTime?
-  image         String?
-  password      String? // hashed password for credential users (null for Google-only users)
-  role          String          @default("student") // student | admin | editor | reviewer
-  accounts      Account[]
-  sessions      Session[]
-  reviews       ContentReview[]
-  chatSessions  ChatSession[]
+  id              String            @id @default(cuid())
+  name            String?
+  email           String?           @unique
+  emailVerified   DateTime?
+  image           String?
+  password        String? // hashed password for credential users (null for Google-only users)
+  role            String            @default("student") // student | admin | editor | reviewer
+  accounts        Account[]
+  sessions        Session[]
+  reviews         ContentReview[]
+  chatSessions    ChatSession[]
+  attempts        Attempt[]
+  favorites       Favorite[]
+  dailyActivities DailyActivity[]
+  userProfile     UserProfile?
+  examSessions    ExamSessionData[]
+  reviewSchedules ReviewSchedule[]
+  learningGoals   LearningGoal[]
+
   @@map("users")
 }
 

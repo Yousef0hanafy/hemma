@@ -540,7 +540,7 @@ export function StudioLibraryClient() {
                   );
                 }}
               >
-                <Eye className="h-3.5 w-3.5 ml-2" />
+                <Eye className="h-3.5 w-3.5 me-2" />
                 معاينة
               </DropdownMenuItem>
               <DropdownMenuItem asChild>
@@ -548,7 +548,7 @@ export function StudioLibraryClient() {
                   href={`/studio/questions/${row.original.id}`}
                   onClick={(e) => e.stopPropagation()}
                 >
-                  <Edit3 className="h-3.5 w-3.5 ml-2" />
+                  <Edit3 className="h-3.5 w-3.5 me-2" />
                   تحرير
                 </Link>
               </DropdownMenuItem>
@@ -561,7 +561,7 @@ export function StudioLibraryClient() {
                   setShowBulkDelete(true);
                 }}
               >
-                <Trash2 className="h-3.5 w-3.5 ml-2" />
+                <Trash2 className="h-3.5 w-3.5 me-2" />
                 حذف
               </DropdownMenuItem>
             </DropdownMenuContent>
@@ -750,7 +750,7 @@ export function StudioLibraryClient() {
             transition={springEntrance}
             className="flex items-center gap-2 p-3 rounded-xl bg-primary/5 border border-primary/20"
           >
-            <span className="text-sm font-medium text-primary ml-2">
+            <span className="text-sm font-medium text-primary me-2">
               {toArabicDigits(selectedIds.size)} سؤال محدد:
             </span>
             <Button
@@ -759,7 +759,7 @@ export function StudioLibraryClient() {
               className="h-8 text-xs"
               onClick={() => setShowBulkStatus(true)}
             >
-              <CheckCircle2 className="h-3.5 w-3.5 ml-1" />
+              <CheckCircle2 className="h-3.5 w-3.5 me-1" />
               تغيير الحالة
             </Button>
             <Button
@@ -768,7 +768,7 @@ export function StudioLibraryClient() {
               className="h-8 text-xs"
               onClick={() => setShowBulkCategory(true)}
             >
-              <Tag className="h-3.5 w-3.5 ml-1" />
+              <Tag className="h-3.5 w-3.5 me-1" />
               تغيير التصنيف
             </Button>
             <Button
@@ -777,13 +777,13 @@ export function StudioLibraryClient() {
               className="h-8 text-xs"
               onClick={() => setShowBulkDelete(true)}
             >
-              <Trash2 className="h-3.5 w-3.5 ml-1 text-destructive" />
+              <Trash2 className="h-3.5 w-3.5 me-1 text-destructive" />
               حذف
             </Button>
             <Button
               variant="ghost"
               size="sm"
-              className="h-8 text-xs mr-auto"
+              className="h-8 text-xs ms-auto"
               onClick={() => setSelectedIds(new Set())}
             >
               إلغاء التحديد

@@ -486,7 +486,7 @@ export function StudioSettingsClient() {
         <Dialog open={resetAllOpen} onOpenChange={setResetAllOpen}>
           <DialogTrigger asChild>
             <Button variant="outline" size="sm">
-              <RotateCcw className="h-4 w-4 ml-2" />
+              <RotateCcw className="h-4 w-4 me-2" />
               إعادة الكل للافتراضي
             </Button>
           </DialogTrigger>
@@ -516,7 +516,7 @@ export function StudioSettingsClient() {
               >
                 {resettingAll ? (
                   <>
-                    <Loader2 className="h-4 w-4 ml-2 animate-spin" />
+                    <Loader2 className="h-4 w-4 me-2 animate-spin" />
                     جاري الإعادة...
                   </>
                 ) : (

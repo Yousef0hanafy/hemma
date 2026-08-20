@@ -298,7 +298,7 @@ export async function POST(request: Request) {
     return new Response(
       JSON.stringify({
         error:
-          "مساعد AI غير متاح حالياً. تأكد من ضبط مفتاح Google Gemini في الإعدادات.",
+          "مساعد AI غير متاح حالياً. تأكد من ضبط مفتاح OpenRouter في الإعدادات.",
       }),
       { status: 503, headers: { "Content-Type": "application/json" } }
     );
@@ -339,12 +339,37 @@ export async function POST(request: Request) {
     },
   });
 
-  // ── Build Gemini request ────────────────────────────────────────
+  // ── Load verified conversation history from database ───────────
+  let verifiedHistory: Array<{ role: "user" | "assistant"; content: string }> = [];
+
+  if (!isNewSession) {
+    // Fetch verified history directly from DB for existing sessions
+    const previousMessages = await db.chatMessage.findMany({
+      where: { sessionId: activeSessionId },
+      orderBy: { createdAt: "desc" },
+      skip: 1, // Skip the message just inserted
+      take: 8,
+      select: { role: true, content: true },
+    });
+    verifiedHistory = previousMessages.reverse().map((m) => ({
+      role: m.role as "user" | "assistant",
+      content: m.content,
+    }));
+  } else if (history && history.length > 0) {
+    // Sanitize any client-provided bootstrap history for brand new sessions
+    verifiedHistory = history.slice(-8).map((m) => ({
+      role: m.role === "assistant" ? "assistant" : "user",
+      content: m.content,
+    }));
+  }
+
+  // ── Build OpenRouter / Gemini request ───────────────────────────
   const modelName = getAIModelName();
   const systemPrompt = buildSystemPrompt();
 
   const geminiModel = client.getGenerativeModel({
     model: modelName,
+    systemInstruction: systemPrompt,
     generationConfig: {
       temperature: 0.7,
       maxOutputTokens: 2048,
@@ -356,20 +381,20 @@ export async function POST(request: Request) {
     parts: Array<{ text: string }>;
   }> = [];
 
-  // Add last 8 messages for context
-  for (const msg of history.slice(-8)) {
+  // Add verified history messages for context
+  for (const msg of verifiedHistory) {
     contents.push({
       role: msg.role === "user" ? ("user" as const) : ("model" as const),
       parts: [{ text: msg.content }],
     });
   }
 
-  // Add the new question with system context injected
+  // Add the new question
   contents.push({
     role: "user" as const,
     parts: [
       {
-        text: `[سياق المساعد]\n${systemPrompt}\n\n[سؤال الطالب]\n${message}`,
+        text: message ?? "",
       },
     ],
   });

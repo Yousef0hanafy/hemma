@@ -12,15 +12,12 @@ import {
   User as UserIcon,
   Settings,
   PanelRightOpen,
-  Command,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   SidebarTrigger,
-  useSidebar,
 } from "@/components/ui/sidebar";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -30,10 +27,19 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
+import { useRouter } from "next/navigation";
+
 export function StudioTopBar() {
   const { data: session } = useSession();
-  const { state } = useSidebar();
   const [searchFocused, setSearchFocused] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const router = useRouter();
+
+  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter" && searchTerm.trim()) {
+      router.push(`/studio/library?search=${encodeURIComponent(searchTerm.trim())}`);
+    }
+  };
 
   const user = session?.user;
   const initials = user?.name
@@ -46,10 +52,7 @@ export function StudioTopBar() {
 
   return (
     <header
-      className={cn(
-        "sticky top-0 z-30 flex h-14 items-center gap-4 border-b border-border/60 bg-background/80 backdrop-blur-sm px-4 transition-all duration-200",
-        state === "collapsed" ? "pe-4" : "pe-4"
-      )}
+      className="sticky top-0 z-30 flex h-14 items-center gap-4 border-b border-border/60 bg-background/80 backdrop-blur-sm px-4 transition-all duration-200"
     >
       {/* Sidebar toggle + brand */}
       <div className="flex items-center gap-2 shrink-0">
@@ -79,17 +82,17 @@ export function StudioTopBar() {
           <Search className="h-4 w-4 text-muted-foreground shrink-0" />
           <input
             type="text"
-            placeholder="ابحث في الاستوديو... (Cmd+K)"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            onKeyDown={handleSearchKeyDown}
+            placeholder="ابحث في أسئلة الاستوديو..."
             className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground/60"
             onFocus={() => setSearchFocused(true)}
             onBlur={() => setSearchFocused(false)}
           />
-          <kbd className="hidden sm:inline-flex items-center gap-0.5 rounded border border-border bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
-            <Command className="h-2.5 w-2.5" />
-            K
-          </kbd>
         </div>
       </div>
+
 
       {/* Right actions */}
       <div className="flex items-center gap-1.5 shrink-0">
@@ -112,9 +115,6 @@ export function StudioTopBar() {
           aria-label="الإشعارات"
         >
           <Bell className="h-4 w-4" />
-          <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-[14px] items-center justify-center rounded-full bg-rose-500 text-[8px] font-bold text-white px-1">
-            3
-          </span>
         </button>
 
         {/* User menu */}
@@ -145,13 +145,13 @@ export function StudioTopBar() {
             <DropdownMenuSeparator />
             <DropdownMenuItem asChild>
               <Link href="/studio/settings" className="cursor-pointer">
-                <Settings className="h-4 w-4 ml-2" />
+                <Settings className="h-4 w-4 me-2" />
                 إعدادات الاستوديو
               </Link>
             </DropdownMenuItem>
             <DropdownMenuItem asChild>
               <Link href="/" className="cursor-pointer">
-                <PanelRightOpen className="h-4 w-4 ml-2" />
+                <PanelRightOpen className="h-4 w-4 me-2" />
                 التطبيق الرئيسي
               </Link>
             </DropdownMenuItem>
@@ -160,7 +160,7 @@ export function StudioTopBar() {
               onClick={() => signOut()}
               className="text-destructive focus:text-destructive cursor-pointer"
             >
-              <LogOut className="h-4 w-4 ml-2" />
+              <LogOut className="h-4 w-4 me-2" />
               تسجيل الخروج
             </DropdownMenuItem>
           </DropdownMenuContent>

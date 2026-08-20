@@ -126,13 +126,16 @@ function isValidIP(ip: string): boolean {
  * Sanitizes input to prevent header injection attacks and validates IP format
  */
 export function getClientIdentifier(request: Request): string {
-  const forwardedFor = request.headers.get("x-forwarded-for");
-  const clientIP = forwardedFor?.split(",")[0]?.trim() || 
-                   request.headers.get("x-real-ip") || 
-                   "unknown";
+  // Check trusted edge headers first (Vercel, Cloudflare, standard proxy)
+  const rawIP = 
+    request.headers.get("x-vercel-forwarded-for")?.split(",")[0]?.trim() ||
+    request.headers.get("cf-connecting-ip")?.trim() ||
+    request.headers.get("x-real-ip")?.trim() ||
+    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || 
+    "unknown";
   
   // Sanitize to prevent header injection - only allow alphanumeric, dots, dashes, colons
-  const sanitized = clientIP.replace(/[^a-zA-Z0-9.\-:]/g, "");
+  const sanitized = rawIP.replace(/[^a-zA-Z0-9.\-:]/g, "");
   
   // Validate IP format - reject if not a valid IP address
   if (sanitized !== "unknown" && !isValidIP(sanitized)) {

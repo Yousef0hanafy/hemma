@@ -6,6 +6,8 @@ import { SidebarProvider } from "@/components/ui/sidebar";
 import { StudioSidebar } from "./StudioSidebar";
 import { StudioTopBar } from "./StudioTopBar";
 
+import { ErrorBoundary } from "@/components/qudurat/ErrorBoundary";
+
 export function StudioShell({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(
     () =>
@@ -21,13 +23,16 @@ export function StudioShell({ children }: { children: React.ReactNode }) {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <SidebarProvider defaultOpen={true}>
+      <SidebarProvider defaultOpen={false}>
         <StudioSidebar />
-        <main className="flex flex-col flex-1 min-h-svh">
+        <main className="flex flex-col flex-1 min-h-svh overflow-x-hidden">
           <StudioTopBar />
-          <div className="flex-1 p-6">{children}</div>
+          <div className="flex-1 p-4 sm:p-6">
+            <ErrorBoundary>{children}</ErrorBoundary>
+          </div>
         </main>
       </SidebarProvider>
     </QueryClientProvider>
   );
 }
+

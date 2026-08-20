@@ -89,7 +89,7 @@ export async function sendChatMessage(
 
   const client = getGeminiClient();
   if (!client) {
-    return { ok: false, error: "لم يتم إعداد مفتاح Google Gemini. تأكد من ضبط GOOGLE_API_KEY في المتغيرات البيئية." };
+    return { ok: false, error: "لم يتم إعداد مفتاح OpenRouter / AI. تأكد من ضبط OPENROUTER_API_KEY في المتغيرات البيئية." };
   }
 
   if (!message.trim()) {

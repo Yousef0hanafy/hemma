@@ -1,8 +1,12 @@
 "use client";
 
-import { useState, useRef, useCallback, useEffect } from "react";
+// =====================================================================
+// Studio Ingestion Client — File-Native (PDF, DOCX, TXT, JSON) UI
+// =====================================================================
+
+import { useState, useRef, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   Upload,
   FileText,
@@ -10,61 +14,54 @@ import {
   AlertCircle,
   X,
   Clipboard,
-  Download,
   Sparkles,
+  ArrowRight,
   ArrowLeft,
   BrainCircuit,
-  Gauge,
-  Clock,
-  XCircle,
+  FileSpreadsheet,
+  FileType,
   Loader2,
+  Layers,
+  BookOpen,
 } from "lucide-react";
+import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { toArabicDigits, relativeTimeAr } from "@/lib/content/ui-helpers";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import {
-  previewImport,
-  confirmImport,
-  getImportHistory,
-} from "@/server/actions/studio-import";
-import { getImportProcessingStatus } from "@/server/actions/studio-processing";
-import type {
-  ImportPreview,
-  ImportPreviewQ,
-  ImportResult,
-} from "@/server/actions/studio-import";
-import type { ImportProcessingStatus } from "@/server/actions/studio-processing";
+  ingestSourceDocument,
+  type IngestResponse,
+} from "@/server/actions/studio-ingest";
+import { getImportHistory } from "@/server/actions/studio-import";
+import { ImportAiStatus } from "@/components/studio/StudioImportAiStatus";
 
 // ---------------------------------------------------------------------------
-// Difficulty badge helper
+// Helpers & Badges
 // ---------------------------------------------------------------------------
 
-const DIFFICULTY_CLASSES: Record<string, string> = {
-  easy: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300",
-  medium: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300",
-  hard: "bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300",
-};
-
-const DIFFICULTY_LABELS: Record<string, string> = {
-  easy: "سهل",
-  medium: "متوسط",
-  hard: "صعب",
-};
+function getFileIcon(filename: string) {
+  const ext = filename.split(".").pop()?.toLowerCase();
+  if (ext === "pdf") return <FileType className="h-6 w-6 text-rose-500" />;
+  if (ext === "docx" || ext === "doc") return <FileText className="h-6 w-6 text-blue-500" />;
+  if (ext === "json") return <FileSpreadsheet className="h-6 w-6 text-amber-500" />;
+  return <FileText className="h-6 w-6 text-violet-500" />;
+}
 
 // ---------------------------------------------------------------------------
-// Drop Zone
+// Universal Drop Zone
 // ---------------------------------------------------------------------------
 
-function DropZone({
-  onFile,
-  onText,
+function UniversalDropZone({
+  onFileSelect,
+  onPasteSubmit,
+  isProcessing,
 }: {
-  onFile: (text: string, filename: string) => void;
-  onText: (text: string) => void;
+  onFileSelect: (file: File) => void;
+  onPasteSubmit: (jsonText: string) => void;
+  isProcessing: boolean;
 }) {
   const [dragOver, setDragOver] = useState(false);
   const [pasteMode, setPasteMode] = useState(false);
@@ -75,41 +72,32 @@ function DropZone({
     (e: React.DragEvent) => {
       e.preventDefault();
       setDragOver(false);
+      if (isProcessing) return;
       const file = e.dataTransfer.files[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-        const text = ev.target?.result as string;
-        onFile(text, file.name);
-      };
-      reader.readAsText(file, "utf-8");
+      if (file) onFileSelect(file);
     },
-    [onFile]
+    [onFileSelect, isProcessing]
   );
 
-  const handleFileSelect = useCallback(
+  const handleInputChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-        const text = ev.target?.result as string;
-        onFile(text, file.name);
-      };
-      reader.readAsText(file, "utf-8");
+      if (file) onFileSelect(file);
     },
-    [onFile]
+    [onFileSelect]
   );
 
-  const handlePasteSubmit = useCallback(() => {
-    if (pastedText.trim()) onText(pastedText.trim());
-  }, [pastedText, onText]);
+  const handlePasteAction = useCallback(() => {
+    if (pastedText.trim()) {
+      onPasteSubmit(pastedText.trim());
+    }
+  }, [pastedText, onPasteSubmit]);
 
   if (pasteMode) {
     return (
       <div className="space-y-3">
         <div className="flex items-center justify-between">
-          <h3 className="text-sm font-medium">لصق نص JSON</h3>
+          <h3 className="text-sm font-medium">لصق نص JSON مباشر</h3>
           <Button
             variant="ghost"
             size="sm"
@@ -119,7 +107,7 @@ function DropZone({
               setPastedText("");
             }}
           >
-            <X className="h-3 w-3 ml-1" />
+            <X className="h-3 w-3 me-1" />
             إلغاء
           </Button>
         </div>
@@ -132,15 +120,15 @@ function DropZone({
         />
         <div className="flex justify-between items-center">
           <span className="text-xs text-muted-foreground">
-            يجب أن يكون النص بصيغة JSON صالحة
+            تنسيق JSON معتمد للتجميعات وبنوك الأسئلة
           </span>
           <Button
             size="sm"
-            onClick={handlePasteSubmit}
-            disabled={!pastedText.trim()}
+            onClick={handlePasteAction}
+            disabled={!pastedText.trim() || isProcessing}
           >
-            <Clipboard className="h-3.5 w-3.5 ml-1" />
-            معاينة
+            <Clipboard className="h-3.5 w-3.5 me-1" />
+            استيراد
           </Button>
         </div>
       </div>
@@ -149,32 +137,33 @@ function DropZone({
 
   return (
     <div className="space-y-4">
-      {/* Drag & drop zone */}
       <div
         onDragOver={(e) => {
           e.preventDefault();
-          setDragOver(true);
+          if (!isProcessing) setDragOver(true);
         }}
         onDragLeave={() => setDragOver(false)}
         onDrop={handleDrop}
-        onClick={() => fileInputRef.current?.click()}
+        onClick={() => !isProcessing && fileInputRef.current?.click()}
         className={cn(
-          "relative flex flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed p-12 transition-all cursor-pointer",
+          "relative flex flex-col items-center justify-center gap-4 rounded-2xl border-2 border-dashed p-12 transition-all cursor-pointer",
           dragOver
-            ? "border-primary bg-primary/5 scale-[1.02]"
-            : "border-border hover:border-primary/40 hover:bg-muted/30"
+            ? "border-primary bg-primary/5 scale-[1.01]"
+            : "border-border hover:border-primary/40 hover:bg-muted/30",
+          isProcessing && "opacity-50 cursor-not-allowed"
         )}
       >
         <input
           ref={fileInputRef}
           type="file"
-          accept=".json"
+          accept=".pdf,.docx,.doc,.txt,.md,.json"
           className="hidden"
-          onChange={handleFileSelect}
+          disabled={isProcessing}
+          onChange={handleInputChange}
         />
         <div
           className={cn(
-            "flex h-14 w-14 items-center justify-center rounded-2xl transition-all",
+            "flex h-16 w-16 items-center justify-center rounded-2xl transition-all shadow-sm",
             dragOver
               ? "bg-primary text-primary-foreground scale-110"
               : "bg-muted text-muted-foreground"
@@ -182,369 +171,189 @@ function DropZone({
         >
           <Upload
             className={cn(
-              "h-6 w-6 transition-transform",
+              "h-8 w-8 transition-transform",
               dragOver && "translate-y-[-2px]"
             )}
           />
         </div>
-        <div className="text-center">
-          <p className="text-sm font-semibold">
-            {dragOver ? "أفلت الملف هنا" : "اسحب وأفلت ملف JSON هنا"}
+        <div className="text-center space-y-1">
+          <p className="text-base font-semibold">
+            {dragOver ? "أفلت المستند هنا للبدء" : "اسحب وأفلت ملف المستند التعليمي هنا"}
           </p>
-          <p className="text-xs text-muted-foreground mt-1">
-            أو اضغط لاختيار ملف من جهازك
+          <p className="text-xs text-muted-foreground">
+            يدعم ملفات PDF، ومستندات Word (DOCX)، وملفات النصوص، وJSON
           </p>
         </div>
-        <div className="flex items-center gap-1 text-[10px] text-muted-foreground/60">
-          <FileText className="h-3 w-3" />
-          <span>JSON فقط — الحد الأقصى ١٠ ميجابايت</span>
+
+        {/* Supported Formats Pills */}
+        <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
+          <Badge variant="outline" className="gap-1 text-[11px] py-1 px-2.5">
+            <span className="h-2 w-2 rounded-full bg-rose-500" />
+            PDF (كتب وملازم)
+          </Badge>
+          <Badge variant="outline" className="gap-1 text-[11px] py-1 px-2.5">
+            <span className="h-2 w-2 rounded-full bg-blue-500" />
+            Word DOCX
+          </Badge>
+          <Badge variant="outline" className="gap-1 text-[11px] py-1 px-2.5">
+            <span className="h-2 w-2 rounded-full bg-amber-500" />
+            JSON
+          </Badge>
+          <Badge variant="outline" className="gap-1 text-[11px] py-1 px-2.5">
+            <span className="h-2 w-2 rounded-full bg-emerald-500" />
+            نصوص TXT
+          </Badge>
+        </div>
+
+        <div className="text-[11px] text-muted-foreground/70">
+          الحد الأقصى لحجم الملف: ١٥ ميجابايت
         </div>
       </div>
 
-      {/* Divider */}
       <div className="flex items-center gap-3">
         <Separator className="flex-1" />
-        <span className="text-xs text-muted-foreground">أو</span>
+        <span className="text-xs text-muted-foreground">أو للمطورين</span>
         <Separator className="flex-1" />
       </div>
 
-      {/* Paste text button */}
       <Button
         variant="outline"
-        className="w-full h-12 rounded-xl"
+        className="w-full h-11 rounded-xl"
         onClick={() => setPasteMode(true)}
       >
-        <Clipboard className="h-4 w-4 ml-2" />
-        لصق نص JSON
+        <Clipboard className="h-4 w-4 me-2" />
+        لصق نص JSON يدوي
       </Button>
     </div>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Preview summary cards
+// Processing Live Progress Stepper
 // ---------------------------------------------------------------------------
 
-function PreviewSummary({ preview }: { preview: ImportPreview }) {
-  const totalWarnings = preview.warnings.length;
-
-  return (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-      <div className="rounded-xl bg-card border border-border p-3.5">
-        <div className="text-2xl font-bold tabular-nums">
-          {toArabicDigits(preview.totalQuestions)}
-        </div>
-        <div className="text-xs text-muted-foreground">سؤال مكتشف</div>
-      </div>
-      <div className="rounded-xl bg-card border border-border p-3.5">
-        <div className="text-2xl font-bold tabular-nums">
-          {toArabicDigits(preview.categories.length)}
-        </div>
-        <div className="text-xs text-muted-foreground">تصنيف</div>
-      </div>
-      <div className="rounded-xl bg-card border border-border p-3.5">
-        <div className="flex items-center gap-1.5">
-          <span className="text-xl font-bold tabular-nums text-emerald-600">
-            {toArabicDigits(preview.difficultyDistribution.easy)}
-          </span>
-          <span className="text-xl font-bold tabular-nums text-amber-600">
-            {toArabicDigits(preview.difficultyDistribution.medium)}
-          </span>
-          <span className="text-xl font-bold tabular-nums text-rose-600">
-            {toArabicDigits(preview.difficultyDistribution.hard)}
-          </span>
-        </div>
-        <div className="text-xs text-muted-foreground">سهل · وسط · صعب</div>
-      </div>
-      <div className="rounded-xl bg-card border border-border p-3.5">
-        <div className="flex items-center gap-2">
-          <span className="text-2xl font-bold tabular-nums">
-            {toArabicDigits(totalWarnings)}
-          </span>
-          {totalWarnings > 0 && (
-            <AlertCircle className="h-4 w-4 text-amber-500" />
-          )}
-        </div>
-        <div className="text-xs text-muted-foreground">
-          {totalWarnings > 0 ? "ملاحظة" : "لا توجد ملاحظات"}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Question preview row
-// ---------------------------------------------------------------------------
-
-function QuestionPreviewRow({
-  q,
-  index,
+function ProcessingLiveStepper({
+  currentPhase,
+  filename,
 }: {
-  q: ImportPreviewQ;
-  index: number;
+  currentPhase: number;
+  filename: string;
 }) {
+  const steps = [
+    { label: "رفع وحفظ الملف", sub: "التحقق من الامتداد والحجم" },
+    { label: "استخراج النصوص", sub: "قراءة النص بدقة قاطعة" },
+    { label: "التحليل الذكي وتوليد الأسئلة", sub: "استخراج وتدقيق الهيكلة" },
+    { label: "حفظ في الاستوديو", sub: "تسجيل بحالة قيد المراجعة" },
+  ];
+
   return (
-    <div
-      className={cn(
-        "flex items-start gap-3 rounded-lg p-3 transition-colors",
-        q.warning ? "bg-amber-50/50 dark:bg-amber-950/20" : "hover:bg-muted/30"
-      )}
-    >
-      <span className="text-xs text-muted-foreground tabular-nums shrink-0 mt-0.5 w-6">
-        {toArabicDigits(index + 1)}
-      </span>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <p className="text-sm line-clamp-1 flex-1">{q.stem}</p>
-          {q.warning && (
-            <AlertCircle className="h-3.5 w-3.5 text-amber-500 shrink-0" aria-label={q.warning} />
-          )}
+    <Card className="border-primary/20 bg-card/60 backdrop-blur-sm">
+      <CardContent className="p-8 text-center space-y-6">
+        <div className="relative mx-auto flex h-20 w-20 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+          <BrainCircuit className="h-10 w-10 animate-pulse text-primary" />
+          <div className="absolute inset-0 rounded-2xl border-2 border-primary border-t-transparent animate-spin" />
         </div>
-        <div className="flex items-center gap-2 mt-1">
-          <span className="text-[10px] text-muted-foreground">
-            {q.categoryNameAr}
-          </span>
-          <span
-            className={cn(
-              "inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold",
-              DIFFICULTY_CLASSES[q.difficulty]
-            )}
-          >
-            {DIFFICULTY_LABELS[q.difficulty]}
-          </span>
-          <span className="text-[10px] text-muted-foreground">
-            {q.hasExplanation ? "✓ شرح" : "✗ لا يوجد شرح"}
-          </span>
-        </div>
-      </div>
-    </div>
-  );
-}
 
-// ---------------------------------------------------------------------------
-// Step indicator
-// ---------------------------------------------------------------------------
-
-const STEPS = [
-  { label: "رفع الملف", icon: Upload },
-  { label: "معاينة", icon: FileText },
-  { label: "استيراد", icon: CheckCircle2 },
-];
-
-function StepIndicator({ current }: { current: number }) {
-  return (
-    <div className="flex items-center justify-center gap-2 mb-6">
-      {STEPS.map((step, i) => {
-        const Icon = step.icon;
-        const completed = i < current;
-        const active = i === current;
-        return (
-          <div key={i} className="flex items-center gap-2">
-            <div
-              className={cn(
-                "flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold transition-all",
-                completed && "bg-primary text-primary-foreground",
-                active && "bg-primary/10 text-primary border border-primary/20",
-                !completed && !active && "bg-muted text-muted-foreground"
-              )}
-            >
-              <Icon className="h-3.5 w-3.5" />
-              <span>{step.label}</span>
-            </div>
-            {i < STEPS.length - 1 && (
-              <div
-                className={cn(
-                  "w-8 h-px",
-                  completed ? "bg-primary" : "bg-border"
-                )}
-              />
-            )}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Import AI Processing Status (live polling)
-// ---------------------------------------------------------------------------
-
-const OPERATION_ICONS: Record<string, React.ReactNode> = {
-  quality_check: <BrainCircuit className="h-4 w-4" />,
-  estimate_difficulty: <Gauge className="h-4 w-4" />,
-  generate_explanation: <Sparkles className="h-4 w-4" />,
-};
-
-const STATUS_META: Record<
-  string,
-  { icon: React.ReactNode; bg: string; text: string }
-> = {
-  disabled: { icon: <Clock className="h-3.5 w-3.5" />, bg: "bg-muted text-muted-foreground", text: "معطل" },
-  queued: { icon: <Clock className="h-3.5 w-3.5" />, bg: "bg-sky-100 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300", text: "قيد الانتظار" },
-  processing: { icon: <Loader2 className="h-3.5 w-3.5 animate-spin" />, bg: "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300", text: "قيد المعالجة..." },
-  completed: { icon: <CheckCircle2 className="h-3.5 w-3.5" />, bg: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300", text: "مكتمل" },
-  failed: { icon: <XCircle className="h-3.5 w-3.5" />, bg: "bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300", text: "فشل" },
-};
-
-function ImportAiStatus({ sourceId }: { sourceId: string }) {
-  const [status, setStatus] = useState<ImportProcessingStatus | null>(null);
-  const [showAll, setShowAll] = useState(false);
-
-  // Poll every 3 seconds
-  useEffect(() => {
-    let mounted = true;
-    let timeoutId: ReturnType<typeof setTimeout>;
-
-    const poll = async () => {
-      try {
-        const result = await getImportProcessingStatus(sourceId);
-        if (mounted) setStatus(result);
-
-        // Stop polling if all enabled operations are finished
-        const allDone = Object.values(result).every(
-          (op) => op.status === "completed" || op.status === "failed" || op.status === "disabled"
-        );
-        if (!allDone) {
-          timeoutId = setTimeout(poll, 3000);
-        }
-      } catch {
-        if (mounted) timeoutId = setTimeout(poll, 5000);
-      }
-    };
-
-    poll();
-    return () => {
-      mounted = false;
-      clearTimeout(timeoutId);
-    };
-  }, [sourceId]);
-
-  if (!status) {
-    return (
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-sm font-semibold flex items-center gap-2">
-            <BrainCircuit className="h-4 w-4 text-violet-500" />
-            معالجة الذكاء الاصطناعي
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            جاري تحميل حالة المعالجة...
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  const enabledOps = Object.entries(status).filter(([, op]) => op.enabled);
-  const visibleOps = showAll ? enabledOps : enabledOps.slice(0, 3);
-
-  return (
-    <Card>
-      <CardHeader className="pb-3">
-        <CardTitle className="text-sm font-semibold flex items-center gap-2">
-          <BrainCircuit className="h-4 w-4 text-violet-500" />
-          معالجة الذكاء الاصطناعي
-          {enabledOps.length > 0 && (
-            <span className="text-[10px] text-muted-foreground font-normal">
-              {enabledOps.filter(([, op]) => op.status === "completed").length}/
-              {enabledOps.length}
-            </span>
-          )}
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="pt-0">
-        {enabledOps.length === 0 ? (
-          <p className="text-xs text-muted-foreground">
-            جميع عمليات المعالجة التلقائية معطلة. فعّلها من الإعدادات.
+        <div className="space-y-1.5">
+          <h3 className="text-lg font-bold">جاري استيعاب ومعالجة المستند</h3>
+          <p className="text-xs text-muted-foreground flex items-center justify-center gap-1.5">
+            {getFileIcon(filename)}
+            <span className="font-mono font-medium">{filename}</span>
           </p>
-        ) : (
-          <div className="space-y-2">
-            {visibleOps.map(([key, op]) => {
-              const meta = STATUS_META[op.status] ?? STATUS_META.queued;
-              return (
-                <div
-                  key={key}
-                  className="flex items-center justify-between rounded-lg border border-border/50 p-2.5 transition-all"
-                >
-                  <div className="flex items-center gap-2.5">
-                    <span className="text-muted-foreground shrink-0">
-                      {OPERATION_ICONS[key]}
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 text-right">
+          {steps.map((st, i) => {
+            const isCompleted = i < currentPhase;
+            const isCurrent = i === currentPhase;
+            return (
+              <div
+                key={i}
+                className={cn(
+                  "p-3 rounded-xl border transition-all text-xs space-y-1",
+                  isCompleted && "bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300",
+                  isCurrent && "bg-primary/5 border-primary text-primary font-semibold shadow-sm",
+                  !isCompleted && !isCurrent && "bg-muted/40 border-border text-muted-foreground opacity-60"
+                )}
+              >
+                <div className="flex items-center gap-1.5">
+                  {isCompleted ? (
+                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+                  ) : isCurrent ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+                  ) : (
+                    <span className="h-3.5 w-3.5 rounded-full border border-muted-foreground/30 flex items-center justify-center text-[9px]">
+                      {i + 1}
                     </span>
-                    <span className="text-xs font-medium">{op.label}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {op.summary && op.status === "completed" && (
-                      <span className="text-[10px] text-muted-foreground">
-                        {op.summary}
-                      </span>
-                    )}
-                    <span
-                      className={cn(
-                        "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold",
-                        meta.bg
-                      )}
-                    >
-                      {meta.icon}
-                      {meta.text}
-                    </span>
-                  </div>
+                  )}
+                  <span>{st.label}</span>
                 </div>
-              );
-            })}
-          </div>
-        )}
+                <p className="text-[10px] text-muted-foreground">{st.sub}</p>
+              </div>
+            );
+          })}
+        </div>
+
+        <p className="text-xs text-muted-foreground/80">
+          تتم معالجة الأسئلة والنصوص بالذكاء الاصطناعي مع الحفظ الآمن في قاعدة البيانات...
+        </p>
       </CardContent>
     </Card>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Main Import Client
+// Main Component
 // ---------------------------------------------------------------------------
 
-type ImportStep = "upload" | "preview" | "importing" | "done" | "error";
+type Step = "upload" | "processing" | "done" | "error";
 
 export function StudioImportClient() {
-  const [step, setStep] = useState<ImportStep>("upload");
-  const [sourceName, setSourceName] = useState("");
-  const [preview, setPreview] = useState<ImportPreview | null>(null);
-  const [result, setResult] = useState<ImportResult | null>(null);
+  const [step, setStep] = useState<Step>("upload");
+  const [filename, setFilename] = useState<string>("");
+  const [progressPhase, setProgressPhase] = useState(0);
+  const [result, setResult] = useState<IngestResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Import history
+  const queryClient = useQueryClient();
+
   const { data: history } = useQuery({
     queryKey: ["import-history"],
     queryFn: getImportHistory,
   });
 
-  // Preview mutation
-  const previewMutation = useMutation({
-    mutationFn: async (text: string) => {
-      const res = await previewImport(text);
-      if (!res.ok) throw new Error(res.error);
-      return res.preview;
-    },
-    onSuccess: (data) => {
-      setPreview(data);
-      setStep("preview");
-    },
-    onError: (err) => {
-      setError(err.message);
-      setStep("error");
-    },
-  });
+  const ingestMutation = useMutation({
+    mutationFn: async (fileOrText: File | string) => {
+      const formData = new FormData();
+      if (typeof fileOrText === "string") {
+        const blob = new Blob([fileOrText], { type: "application/json" });
+        formData.append("file", blob, "direct_input.json");
+        setFilename("direct_input.json");
+      } else {
+        formData.append("file", fileOrText);
+        setFilename(fileOrText.name);
+      }
 
-  // Confirm mutation
-  const queryClient = useQueryClient();
-  const confirmMutation = useMutation({
-    mutationFn: async () => {
-      if (!preview) throw new Error("لا توجد معاينة");
-      return confirmImport(preview.payload, preview.sourceTitle, preview.sourceDate);
+      setStep("processing");
+      setProgressPhase(1);
+
+      // Simulate progressing phase states for smooth UI feedback
+      const timer1 = setTimeout(() => setProgressPhase(2), 2000);
+      const timer2 = setTimeout(() => setProgressPhase(3), 5000);
+
+      try {
+        const res = await ingestSourceDocument(formData);
+        clearTimeout(timer1);
+        clearTimeout(timer2);
+        if (!res.ok) {
+          throw new Error(res.error || "فشل استيراد المستند.");
+        }
+        return res;
+      } catch (e) {
+        clearTimeout(timer1);
+        clearTimeout(timer2);
+        throw e;
+      }
     },
     onSuccess: (data) => {
       setResult(data);
@@ -557,272 +366,234 @@ export function StudioImportClient() {
     },
   });
 
-  // ── Handlers ──────────────────────────────────────────────
-
-  const handleFile = useCallback(
-    (text: string, filename: string) => {
-      setSourceName(filename.replace(/\.json$/i, ""));
+  const handleFileSelect = useCallback(
+    (file: File) => {
       setError(null);
-      previewMutation.mutate(text);
+      ingestMutation.mutate(file);
     },
-    [previewMutation]
+    [ingestMutation]
   );
 
-  const handleText = useCallback(
-    (text: string) => {
-      setSourceName("نص مباشر");
+  const handlePasteSubmit = useCallback(
+    (jsonText: string) => {
       setError(null);
-      previewMutation.mutate(text);
+      ingestMutation.mutate(jsonText);
     },
-    [previewMutation]
+    [ingestMutation]
   );
-
-  const handleConfirm = useCallback(() => {
-    setStep("importing");
-    confirmMutation.mutate();
-  }, [confirmMutation]);
 
   const handleReset = useCallback(() => {
     setStep("upload");
-    setPreview(null);
+    setFilename("");
     setResult(null);
     setError(null);
-    previewMutation.reset();
-    confirmMutation.reset();
-  }, [previewMutation, confirmMutation]);
-
-  // ── Render ────────────────────────────────────────────────
+    setProgressPhase(0);
+    ingestMutation.reset();
+  }, [ingestMutation]);
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
-      {/* Header */}
+    <div className="max-w-4xl mx-auto space-y-6 pb-12">
+      {/* Page Header */}
       <div>
-        <h1 className="text-2xl font-bold">مركز الاستيراد</h1>
+        <h1 className="text-2xl font-bold tracking-tight">مركز استيعاب المصادر التعليمية</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          استيراد ملفات الأسئلة بتنسيق JSON إلى المنصة
+          ارفع أي ملف تعليمي (PDF، Word، نصوص، أو JSON) وسيقوم النظام باستخراجه وهيكلته تلقائياً
         </p>
       </div>
 
-      {/* Step indicator */}
-      {step !== "upload" && <StepIndicator current={step === "preview" ? 1 : 2} />}
+      <AnimatePresence mode="wait">
+        {/* STEP 1: Upload */}
+        {step === "upload" && (
+          <motion.div
+            key="upload"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            className="space-y-6"
+          >
+            <UniversalDropZone
+              onFileSelect={handleFileSelect}
+              onPasteSubmit={handlePasteSubmit}
+              isProcessing={ingestMutation.isPending}
+            />
 
-      {/* ────────────── STEP: Upload ────────────── */}
-      {step === "upload" && (
-        <div className="space-y-6">
-          <DropZone onFile={handleFile} onText={handleText} />
-
-          {/* Import history */}
-          {history && history.length > 0 && (
+            {/* Ingestion History */}
             <Card>
               <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-semibold">
-                  آخر الاستيرادات
+                <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                  <Layers className="h-4 w-4 text-primary" />
+                  المصادر المستوردة مؤخراً
                 </CardTitle>
               </CardHeader>
               <CardContent className="pt-0">
-                <div className="space-y-1">
-                  {history.slice(0, 5).map((item) => (
-                    <div
-                      key={item.id}
-                      className="flex items-center justify-between rounded-lg p-2.5 hover:bg-muted/30 transition-colors"
-                    >
-                      <div className="flex items-center gap-2">
-                        <FileText className="h-4 w-4 text-primary" />
-                        <span className="text-sm">{item.title}</span>
+                {history && history.length > 0 ? (
+                  <div className="divide-y divide-border/50">
+                    {history.slice(0, 5).map((item) => (
+                      <div
+                        key={item.id}
+                        className="flex items-center justify-between py-2.5 hover:bg-muted/30 px-2 rounded-lg transition-colors"
+                      >
+                        <div className="flex items-center gap-2.5">
+                          {getFileIcon(item.title)}
+                          <span className="text-sm font-medium">{item.title}</span>
+                        </div>
+                        <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                          <span className="tabular-nums">
+                            {toArabicDigits(item.questionCount)} سؤال
+                          </span>
+                          <span>{relativeTimeAr(item.importedAt.toISOString())}</span>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                        <span className="tabular-nums">
-                          {toArabicDigits(item.questionCount)} سؤال
-                        </span>
-                        <span>{relativeTimeAr(item.importedAt.toISOString())}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center py-8 text-center text-muted-foreground">
+                    <Layers className="h-8 w-8 mb-3 opacity-30" />
+                    <p className="text-sm font-medium">لا توجد مصادر مستوردة بعد</p>
+                    <p className="text-xs mt-1 opacity-70">ارفع أول ملف لك أعلاه لتبدأ</p>
+                  </div>
+                )}
               </CardContent>
             </Card>
-          )}
-        </div>
-      )}
+          </motion.div>
+        )}
 
-      {/* ────────────── STEP: Error ────────────── */}
-      {step === "error" && (
-        <div className="rounded-2xl border border-rose-200 dark:border-rose-900 bg-rose-50/50 dark:bg-rose-950/20 p-6 text-center">
-          <AlertCircle className="h-10 w-10 text-rose-500 mx-auto mb-3" />
-          <h3 className="text-sm font-semibold mb-1">فشل معالجة الملف</h3>
-          <p className="text-sm text-muted-foreground whitespace-pre-line">
-            {error}
-          </p>
-          <Button variant="outline" className="mt-4" onClick={handleReset}>
-            حاول مرة أخرى
-          </Button>
-        </div>
-      )}
+        {/* STEP 2: Processing Live Stepper */}
+        {step === "processing" && (
+          <motion.div
+            key="processing"
+            initial={{ opacity: 0, scale: 0.98 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.98 }}
+          >
+            <ProcessingLiveStepper
+              currentPhase={progressPhase}
+              filename={filename}
+            />
+          </motion.div>
+        )}
 
-      {/* ────────────── STEP: Preview ────────────── */}
-      {step === "preview" && preview && (
-        <div className="space-y-4">
-          {/* Source info */}
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-lg font-semibold">{preview.sourceTitle}</h2>
-              <p className="text-sm text-muted-foreground">
-                {sourceName} · {toArabicDigits(preview.totalQuestions)} سؤال
-                {preview.sourceDate && ` · ${preview.sourceDate}`}
+        {/* STEP 3: Error */}
+        {step === "error" && (
+          <motion.div
+            key="error"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            className="rounded-2xl border border-rose-200 dark:border-rose-900 bg-rose-50/50 dark:bg-rose-950/20 p-8 text-center space-y-4"
+          >
+            <AlertCircle className="h-12 w-12 text-rose-500 mx-auto" />
+            <div className="space-y-1">
+              <h3 className="text-base font-bold text-rose-700 dark:text-rose-300">
+                تعذر استيعاب الملف
+              </h3>
+              <p className="text-sm text-muted-foreground max-w-lg mx-auto whitespace-pre-line">
+                {error}
               </p>
             </div>
-            <Button variant="ghost" size="sm" onClick={handleReset}>
-              <ArrowLeft className="h-3.5 w-3.5 ml-1" />
-              تغيير الملف
+            <Button variant="outline" onClick={handleReset} className="mt-2">
+              <ArrowRight className="h-4 w-4 me-1" />
+              المحاولة مرة أخرى
             </Button>
-          </div>
+          </motion.div>
+        )}
 
-          {/* AI Summary */}
-          <div className="rounded-xl border border-violet-200 dark:border-violet-900 bg-violet-50/50 dark:bg-violet-950/20 p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <Sparkles className="h-4 w-4 text-violet-500" />
-              <span className="text-xs font-semibold text-violet-700 dark:text-violet-300">
-                ملخص التحليل
-              </span>
-            </div>
-            <div className="text-sm text-foreground/80">
-              تم اكتشاف <strong>{toArabicDigits(preview.totalQuestions)} سؤالاً</strong> موزعين على{" "}
-              <strong>{toArabicDigits(preview.categories.length)} تصنيفات</strong>:
-              {" "}{preview.categories.join("، ")}.
-              {" "}{preview.difficultyDistribution.easy > 0 && `${toArabicDigits(preview.difficultyDistribution.easy)} سهل`}
-              {preview.difficultyDistribution.easy > 0 && preview.difficultyDistribution.medium > 0 && "، "}
-              {preview.difficultyDistribution.medium > 0 && `${toArabicDigits(preview.difficultyDistribution.medium)} متوسط`}
-              {((preview.difficultyDistribution.easy > 0 || preview.difficultyDistribution.medium > 0) && preview.difficultyDistribution.hard > 0) && "، "}
-              {preview.difficultyDistribution.hard > 0 && `${toArabicDigits(preview.difficultyDistribution.hard)} صعب`}.
-            </div>
-          </div>
-
-          {/* Summary cards */}
-          <PreviewSummary preview={preview} />
-
-          {/* Questions list */}
-          <ScrollArea className="h-72 rounded-xl border border-border">
-            <div className="p-2 divide-y divide-border/50">
-              {preview.questions.map((q, i) => (
-                <QuestionPreviewRow key={i} q={q} index={i} />
-              ))}
-            </div>
-          </ScrollArea>
-
-          {/* Warnings */}
-          {preview.warnings.length > 0 && (
-            <div className="rounded-xl border border-amber-200 dark:border-amber-900 bg-amber-50/50 dark:bg-amber-950/20 p-3">
-              <div className="flex items-center gap-2 mb-1">
-                <AlertCircle className="h-4 w-4 text-amber-500" />
-                <span className="text-xs font-semibold text-amber-700 dark:text-amber-300">
-                  {toArabicDigits(preview.warnings.length)} ملاحظة
-                </span>
+        {/* STEP 4: Success & Review */}
+        {step === "done" && result && (
+          <motion.div
+            key="done"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            className="space-y-6"
+          >
+            <div className="flex flex-col items-center justify-center py-8 text-center space-y-3">
+              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-500 shadow-sm">
+                <CheckCircle2 className="h-8 w-8" />
               </div>
-              <ul className="text-xs text-amber-700/80 dark:text-amber-300/80 space-y-0.5 pr-5 list-disc">
-                {preview.warnings.slice(0, 5).map((w, i) => (
-                  <li key={i}>{w}</li>
-                ))}
-                {preview.warnings.length > 5 && (
-                  <li className="text-muted-foreground">
-                    و{toArabicDigits(preview.warnings.length - 5)} ملاحظات أخرى...
-                  </li>
-                )}
-              </ul>
+              <div className="space-y-1">
+                <h2 className="text-xl font-bold">تم استيعاب المستند بنجاح!</h2>
+                <p className="text-sm text-muted-foreground">
+                  المصدر: <strong>{result.title}</strong>
+                </p>
+              </div>
+              <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300 border-amber-200">
+                تم الحفظ بحالة: قيد المراجعة (Review)
+              </Badge>
             </div>
-          )}
 
-          {/* Action buttons */}
-          <div className="flex items-center justify-between pt-2">
-            <div className="text-xs text-muted-foreground">
-              سيتم استيراد <strong>{toArabicDigits(preview.questions.length)} سؤالاً</strong> بحالة "مراجعة"
+            {/* Metrics Grid */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              <Card>
+                <CardContent className="p-4 text-center">
+                  <div className="text-2xl font-bold tabular-nums text-emerald-600">
+                    {toArabicDigits(result.insertedQuestions ?? 0)}
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-1">
+                    أسئلة مستخرجة / مولدة
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardContent className="p-4 text-center">
+                  <div className="text-2xl font-bold tabular-nums text-blue-600">
+                    {toArabicDigits(result.insertedPassages ?? 0)}
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-1">
+                    قطع ونصوص تعليمية
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="col-span-2 sm:col-span-1">
+                <CardContent className="p-4 text-center">
+                  <div className="text-sm font-semibold text-foreground flex items-center justify-center gap-1">
+                    <Sparkles className="h-4 w-4 text-violet-500" />
+                    مكتمل
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-1">
+                    جاهز للمراجعة في الاستوديو
+                  </div>
+                </CardContent>
+              </Card>
             </div>
-            <div className="flex items-center gap-2">
-              <Button variant="outline" onClick={handleReset}>
-                إلغاء
+
+            {/* Warnings / Ambiguities if any */}
+            {result.warnings && result.warnings.length > 0 && (
+              <div className="rounded-xl border border-amber-200 dark:border-amber-900 bg-amber-50/50 dark:bg-amber-950/20 p-4 space-y-2">
+                <div className="flex items-center gap-2 text-amber-700 dark:text-amber-300 font-semibold text-xs">
+                  <AlertCircle className="h-4 w-4" />
+                  ملاحظات أثناء الاستخراج:
+                </div>
+                <ul className="text-xs text-amber-800 dark:text-amber-200 list-disc pr-5 space-y-1">
+                  {result.warnings.map((w, idx) => (
+                    <li key={idx}>{w}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {/* AI Post-Processing Status Polling */}
+            {result.sourceId && <ImportAiStatus sourceId={result.sourceId} />}
+
+            {/* Actions */}
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
+              <Button variant="outline" onClick={handleReset} className="w-full sm:w-auto">
+                <Upload className="h-4 w-4 me-1" />
+                استيعاب مستند آخر
               </Button>
-              <Button onClick={handleConfirm}>
-                <Download className="h-4 w-4 ml-1" />
-                استيراد الآن
+              <Button asChild className="w-full sm:w-auto">
+                <Link href={`/studio/library?source=${result.sourceId || ""}`}>
+                  <BookOpen className="h-4 w-4 me-1" />
+                  مراجعة الأسئلة في المكتبة
+                  <ArrowLeft className="h-3.5 w-3.5 ms-1" />
+                </Link>
               </Button>
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* ────────────── STEP: Importing ────────────── */}
-      {step === "importing" && (
-        <div className="flex flex-col items-center justify-center py-16 text-center">
-          <div className="relative mb-6">
-            <div className="h-16 w-16 rounded-full border-4 border-primary/20 border-t-primary animate-spin" />
-          </div>
-          <h3 className="text-lg font-semibold mb-1">جاري استيراد الأسئلة...</h3>
-          <p className="text-sm text-muted-foreground">
-            يتم حفظ الأسئلة في قاعدة البيانات. قد تستغرق هذه العملية بضع ثوانٍ.
-          </p>
-        </div>
-      )}
-
-      {/* ────────────── STEP: Done ────────────── */}
-      {step === "done" && result && (
-        <div className="space-y-6">
-          <div className="flex flex-col items-center justify-center py-8 text-center">
-            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-50 dark:bg-emerald-950/30 mb-4">
-              <CheckCircle2 className="h-8 w-8 text-emerald-500" />
-            </div>
-            <h2 className="text-xl font-bold mb-1">تم الاستيراد بنجاح!</h2>
-            <p className="text-sm text-muted-foreground">
-              تم استيراد {toArabicDigits(result.inserted)} من {toArabicDigits(result.total)} سؤال
-            </p>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-xl bg-card border border-border p-4">
-              <div className="text-2xl font-bold tabular-nums text-emerald-600">
-                {toArabicDigits(result.inserted)}
-              </div>
-              <div className="text-xs text-muted-foreground">تم استيرادها</div>
-            </div>
-            <div className="rounded-xl bg-card border border-border p-4">
-              <div className="text-2xl font-bold tabular-nums">
-                {toArabicDigits(result.total - result.inserted)}
-              </div>
-              <div className="text-xs text-muted-foreground">تم تخطيها</div>
-            </div>
-          </div>
-
-          {/* Live AI processing status */}
-          <ImportAiStatus sourceId={result.sourceId} />
-
-          {result.errors.length > 0 && (
-            <div className="rounded-xl border border-rose-200 dark:border-rose-900 bg-rose-50/50 dark:bg-rose-950/20 p-3">
-              <div className="flex items-center gap-2 mb-1">
-                <AlertCircle className="h-4 w-4 text-rose-500" />
-                <span className="text-xs font-semibold text-rose-700 dark:text-rose-300">
-                  {toArabicDigits(result.errors.length)} خطأ
-                </span>
-              </div>
-              <ul className="text-xs text-rose-700/80 space-y-0.5 pr-5 list-disc">
-                {result.errors.slice(0, 3).map((e, i) => (
-                  <li key={i}>{e}</li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          <div className="flex items-center justify-center gap-3">
-            <Button variant="outline" onClick={handleReset}>
-              <Upload className="h-4 w-4 ml-1" />
-              استيراد ملف آخر
-            </Button>
-            <Button asChild>
-              <a href="/studio/library?status=review">
-                <FileText className="h-4 w-4 ml-1" />
-                عرض الأسئلة المستوردة
-              </a>
-            </Button>
-          </div>
-        </div>
-      )}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

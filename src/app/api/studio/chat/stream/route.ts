@@ -196,7 +196,7 @@ export async function POST(req: NextRequest) {
   if (!client) {
     return new Response(
       JSON.stringify({
-        error: "لم يتم إعداد مفتاح Google Gemini. تأكد من ضبط GOOGLE_API_KEY في المتغيرات البيئية.",
+        error: "لم يتم إعداد مفتاح OpenRouter. تأكد من ضبط OPENROUTER_API_KEY في المتغيرات البيئية.",
       }),
       { status: 500, headers: { "Content-Type": "application/json" } }
     );

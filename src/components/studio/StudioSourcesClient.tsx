@@ -507,7 +507,7 @@ function DeleteSourceDialog({
           >
             {pending ? (
               <>
-                <Loader2 className="h-4 w-4 ml-2 animate-spin" />
+                <Loader2 className="h-4 w-4 me-2 animate-spin" />
                 جاري الحذف...
               </>
             ) : (
@@ -588,7 +588,7 @@ function ExportSourceDialog({ sourceId }: { sourceId: string }) {
                 إغلاق
               </Button>
               <Button onClick={handleDownload}>
-                <Download className="h-4 w-4 ml-2" />
+                <Download className="h-4 w-4 me-2" />
                 تحميل الملف
               </Button>
             </DialogFooter>
@@ -601,7 +601,7 @@ function ExportSourceDialog({ sourceId }: { sourceId: string }) {
             <Button onClick={handleExport} disabled={exporting}>
               {exporting ? (
                 <>
-                  <Loader2 className="h-4 w-4 ml-2 animate-spin" />
+                  <Loader2 className="h-4 w-4 me-2 animate-spin" />
                   جاري التصدير...
                 </>
               ) : (
@@ -808,7 +808,7 @@ function SourceRow({
             </div>
           </div>
         </TableCell>
-        <TableCell className="py-3 text-left">
+        <TableCell className="py-3 text-start">
           <div
             className="flex items-center justify-end gap-1"
             onClick={(e) => e.stopPropagation()}
@@ -1018,7 +1018,7 @@ export function StudioSourcesClient() {
                 className="mt-4"
                 onClick={() => router.push("/studio/import")}
               >
-                <UploadIcon className="h-4 w-4 ml-2" />
+                <UploadIcon className="h-4 w-4 me-2" />
                 الذهاب لمركز الاستيراد
               </Button>
             )}
@@ -1213,7 +1213,7 @@ export function StudioSourcesClient() {
               <TableHead className="w-[15%]">تاريخ الاستيراد</TableHead>
               <TableHead className="w-[12%]">الأسئلة</TableHead>
               <TableHead className="w-[25%]">توزيع الحالات</TableHead>
-              <TableHead className="w-[8%] text-left">إجراءات</TableHead>
+              <TableHead className="w-[8%] text-start">إجراءات</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>

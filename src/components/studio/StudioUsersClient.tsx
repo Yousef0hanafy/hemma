@@ -435,7 +435,7 @@ function UserRow({
             <span className="text-xs">{formatDate(user.lastActiveAt)}</span>
           </div>
         </TableCell>
-        <TableCell className="py-2.5 text-left">
+        <TableCell className="py-2.5 text-start">
           <div
             className="flex items-center justify-end gap-0.5"
             onClick={(e) => e.stopPropagation()}
@@ -705,7 +705,7 @@ export function StudioUsersClient() {
               <TableHead className="w-[18%]">تغيير الدور</TableHead>
               <TableHead className="w-[15%]">النشاط</TableHead>
               <TableHead className="w-[15%]">آخر ظهور</TableHead>
-              <TableHead className="w-[14%] text-left">إجراءات</TableHead>
+              <TableHead className="w-[14%] text-start">إجراءات</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
