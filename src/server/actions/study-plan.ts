@@ -80,27 +80,49 @@ export async function fetchStudyPlan(): Promise<StudyPlanRecommendation | null> 
   const userBucket = await getUserBucket();
 
   // Fetch all data in parallel
-  const [profile, categories, masteryData, dueReviewCount, recent30, recent7] =
+  const [dbProfile, categories, masteryData, dueReviewCount, recent30, recent7] =
     await Promise.all([
-      db.userProfile.findUnique({ where: { userBucket } }),
-      db.category.findMany({ orderBy: { displayOrder: "asc" } }),
-      fetchCategoryMastery(userBucket),
+      db.userProfile.findUnique({ where: { userBucket } }).catch(() => null),
+      db.category.findMany({ orderBy: { displayOrder: "asc" } }).catch(() => []),
+      fetchCategoryMastery(userBucket).catch(() => []),
       db.reviewSchedule.count({
         where: { userBucket, nextReviewAt: { lte: new Date() } },
-      }),
-      fetchRecentAttempts(userBucket, 30),
-      fetchRecentAttempts(userBucket, 7),
+      }).catch(() => 0),
+      fetchRecentAttempts(userBucket, 30).catch(() => []),
+      fetchRecentAttempts(userBucket, 7).catch(() => []),
     ]);
 
-  if (!profile) return null;
+  let profile = dbProfile;
+  if (!profile) {
+    profile = await db.userProfile.upsert({
+      where: { userBucket },
+      update: {},
+      create: {
+        userBucket,
+        totalXp: 0,
+        level: 1,
+        currentStreak: 0,
+        longestStreak: 0,
+        streakShields: 1,
+      },
+    }).catch(() => null);
+  }
 
-  const totalXp = profile.totalXp;
-  const level = profile.level;
-  const streakDays = profile.currentStreak;
-  const totalAttempts = await db.attempt.count({ where: { userBucket } });
+  const effectiveProfile = profile ?? {
+    totalXp: 0,
+    level: 1,
+    currentStreak: 0,
+    longestStreak: 0,
+    streakShields: 1,
+  };
+
+  const totalXp = effectiveProfile.totalXp;
+  const level = effectiveProfile.level;
+  const streakDays = effectiveProfile.currentStreak;
+  const totalAttempts = await db.attempt.count({ where: { userBucket } }).catch(() => 0);
   const correctAttempts = await db.attempt.count({
     where: { userBucket, isCorrect: true },
-  });
+  }).catch(() => 0);
   const overallAccuracy =
     totalAttempts > 0 ? Math.round((correctAttempts / totalAttempts) * 100) : null;
 
@@ -522,38 +544,43 @@ async function fetchRecentAttempts(
 async function fetchCategoryMastery(
   userBucket: string
 ): Promise<CategoryMastery[]> {
-  const [cats, totals, userStats] = await Promise.all([
-    db.category.findMany({ orderBy: { displayOrder: "asc" } }),
-    db.question.groupBy({
-      by: ["categoryId"],
-      _count: true,
-    }),
-    db.$queryRaw<{ categoryId: string; attempted: number; correct: number }[]>`
-      SELECT q."categoryId",
-             COUNT(a.id)::int AS attempted,
-             SUM(CASE WHEN a."isCorrect" THEN 1 ELSE 0 END)::int AS correct
-      FROM attempts a
-      JOIN questions q ON a."questionId" = q.id
-      WHERE a."userBucket" = ${userBucket}
-      GROUP BY q."categoryId"
-    `,
-  ]);
+  try {
+    const [cats, totals, userStats] = await Promise.all([
+      db.category.findMany({ orderBy: { displayOrder: "asc" } }).catch(() => []),
+      db.question.groupBy({
+        by: ["categoryId"],
+        _count: true,
+      }).catch(() => []),
+      db.$queryRaw<{ categoryId: string; attempted: number; correct: number }[]>`
+        SELECT q."categoryId",
+               COUNT(a.id)::int AS attempted,
+               SUM(CASE WHEN a."isCorrect" THEN 1 ELSE 0 END)::int AS correct
+        FROM attempts a
+        JOIN questions q ON a."questionId" = q.id
+        WHERE a."userBucket" = ${userBucket}
+        GROUP BY q."categoryId"
+      `.catch(() => []),
+    ]);
 
-  const totalMap = new Map(totals.map((t) => [t.categoryId, t._count]));
-  const statMap = new Map(userStats.map((s) => [s.categoryId, s]));
+    const totalMap = new Map(totals.map((t) => [t.categoryId, t._count]));
+    const statMap = new Map(userStats.map((s) => [s.categoryId, s]));
 
-  return cats.map((c) => {
-    const total = totalMap.get(c.id) ?? 0;
-    const s = statMap.get(c.id) ?? { attempted: 0, correct: 0 };
-    return {
-      categorySlug: c.slug,
-      categoryNameAr: c.nameAr,
-      colorTheme: c.colorTheme,
-      icon: c.icon,
-      total,
-      attempted: s.attempted,
-      correct: s.correct,
-      mastery: computeMastery(total, s.attempted, s.correct),
-    };
-  });
+    return cats.map((c) => {
+      const total = totalMap.get(c.id) ?? 0;
+      const s = statMap.get(c.id) ?? { attempted: 0, correct: 0 };
+      return {
+        categorySlug: c.slug,
+        categoryNameAr: c.nameAr,
+        colorTheme: c.colorTheme,
+        icon: c.icon,
+        total,
+        attempted: s.attempted,
+        correct: s.correct,
+        mastery: computeMastery(total, s.attempted, s.correct),
+      };
+    });
+  } catch (err) {
+    console.warn("[StudyPlan] fetchCategoryMastery error:", err);
+    return [];
+  }
 }

@@ -45,22 +45,29 @@ export function StudyPlanView() {
 
   const [showAIPlan, setShowAIPlan] = useState(true);
 
-  if (loading || !result) {
+  if (loading) {
     return <FullScreenLoader label="جارٍ تحليل أدائك…" />;
   }
 
-  const plan = result.heuristicPlan;
-  const ai = showAIPlan ? result.aiPlan : null;
+  const plan = result?.heuristicPlan;
+  const ai = showAIPlan ? result?.aiPlan : null;
 
-  if (!plan) {
+  if (!result || !plan) {
     return (
-      <div className="max-w-4xl mx-auto py-20 text-center space-y-4">
-        <p className="text-muted-foreground">لم يتم العثور على بيانات كافية للتحليل.</p>
+      <div className="max-w-md mx-auto my-16 p-8 text-center space-y-4 rounded-2xl border border-border bg-card shadow-sm">
+        <div className="w-12 h-12 mx-auto rounded-full bg-primary/10 flex items-center justify-center text-primary">
+          <Brain className="h-6 w-6" />
+        </div>
+        <h2 className="text-lg font-bold">لا توجد بيانات كافية للخطة الذكية</h2>
+        <p className="text-sm text-muted-foreground">
+          ابدأ بحل بعض التمارين والأسئلة ليقوم الذكاء الاصطناعي بتحليل مستواك وتصميم خطة مخصصة لك.
+        </p>
         <button
-          onClick={() => back()}
-          className="text-sm text-primary hover:underline"
+          onClick={() => setView({ kind: "study_setup" })}
+          className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-primary text-primary-foreground py-2.5 text-sm font-semibold hover:bg-primary/90 transition-all shadow-sm"
         >
-          العودة
+          <span>بدء التمرن الآن</span>
+          <Play className="h-4 w-4 fill-current" />
         </button>
       </div>
     );

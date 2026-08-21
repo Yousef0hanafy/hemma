@@ -51,32 +51,58 @@ export async function fetchAIStudyPlan(): Promise<AIStudyPlanResult | null> {
   const userBucket = await getUserBucket();
 
   // Fetch all required data
-  const [profile, categories] = await Promise.all([
-    db.userProfile.findUnique({ where: { userBucket } }),
-    db.category.findMany({ orderBy: { displayOrder: "asc" } }),
+  const [dbProfile, categories] = await Promise.all([
+    db.userProfile.findUnique({ where: { userBucket } }).catch(() => null),
+    db.category.findMany({ orderBy: { displayOrder: "asc" } }).catch(() => []),
   ]);
 
-  if (!profile) return null;
+  let profile = dbProfile;
+  if (!profile) {
+    profile = await db.userProfile.upsert({
+      where: { userBucket },
+      update: {},
+      create: {
+        userBucket,
+        totalXp: 0,
+        level: 1,
+        currentStreak: 0,
+        longestStreak: 0,
+        streakShields: 1,
+      },
+    }).catch(() => null);
+  }
+
+  const effectiveProfile = profile ?? {
+    totalXp: 0,
+    level: 1,
+    currentStreak: 0,
+    longestStreak: 0,
+    streakShields: 1,
+  };
 
   // Compute mastery data and stats
   const categoryData = await buildCategoryData(userBucket, categories);
-  const stats = await buildStats(userBucket, profile);
+  const stats = await buildStats(userBucket, effectiveProfile);
 
   // Try AI plan
   let aiPlan: (StudyPlanOutput & { generatedAt: string }) | null = null;
   let aiUsed = false;
 
   if (isAIAvailable() && stats.totalAttempts > 0) {
-    const input = await buildAIInput(stats, categoryData);
-    const plan = await generateAIStudyPlan(input);
-    if (plan) {
-      aiPlan = { ...plan, generatedAt: new Date().toISOString() };
-      aiUsed = true;
+    try {
+      const input = await buildAIInput(stats, categoryData);
+      const plan = await generateAIStudyPlan(input);
+      if (plan) {
+        aiPlan = { ...plan, generatedAt: new Date().toISOString() };
+        aiUsed = true;
+      }
+    } catch (err) {
+      console.warn("[AIStudyPlan] Error generating AI plan, using heuristic:", err);
     }
   }
 
   // Always fetch heuristic plan as fallback
-  const heuristicPlan = await fetchHeuristicPlan();
+  const heuristicPlan = await fetchHeuristicPlan().catch(() => null);
 
   return {
     aiPlan,
@@ -104,37 +130,42 @@ async function buildCategoryData(
   userBucket: string,
   categories: Array<{ id: string; slug: string; nameAr: string }>
 ) {
-  const [totals, userStats] = await Promise.all([
-    db.question.groupBy({
-      by: ["categoryId"],
-      _count: true,
-    }),
-    db.$queryRaw<{ categoryId: string; attempted: number; correct: number }[]>`
-      SELECT q."categoryId",
-             COUNT(a.id)::int AS attempted,
-             SUM(CASE WHEN a."isCorrect" THEN 1 ELSE 0 END)::int AS correct
-      FROM attempts a
-      JOIN questions q ON a."questionId" = q.id
-      WHERE a."userBucket" = ${userBucket}
-      GROUP BY q."categoryId"
-    `,
-  ]);
+  try {
+    const [totals, userStats] = await Promise.all([
+      db.question.groupBy({
+        by: ["categoryId"],
+        _count: true,
+      }).catch(() => []),
+      db.$queryRaw<{ categoryId: string; attempted: number; correct: number }[]>`
+        SELECT q."categoryId",
+               COUNT(a.id)::int AS attempted,
+               SUM(CASE WHEN a."isCorrect" THEN 1 ELSE 0 END)::int AS correct
+        FROM attempts a
+        JOIN questions q ON a."questionId" = q.id
+        WHERE a."userBucket" = ${userBucket}
+        GROUP BY q."categoryId"
+      `.catch(() => []),
+    ]);
 
-  const totalMap = new Map(totals.map((t) => [t.categoryId, t._count]));
-  const statMap = new Map(userStats.map((s) => [s.categoryId, s]));
+    const totalMap = new Map(totals.map((t) => [t.categoryId, t._count]));
+    const statMap = new Map(userStats.map((s) => [s.categoryId, s]));
 
-  return categories.map((c) => {
-    const total = totalMap.get(c.id) ?? 0;
-    const s = statMap.get(c.id) ?? { attempted: 0, correct: 0 };
-    return {
-      slug: c.slug,
-      nameAr: c.nameAr,
-      mastery: computeMastery(total, s.attempted, s.correct),
-      attempted: s.attempted,
-      correct: s.correct,
-      total,
-    };
-  });
+    return categories.map((c) => {
+      const total = totalMap.get(c.id) ?? 0;
+      const s = statMap.get(c.id) ?? { attempted: 0, correct: 0 };
+      return {
+        slug: c.slug,
+        nameAr: c.nameAr,
+        mastery: computeMastery(total, s.attempted, s.correct),
+        attempted: s.attempted,
+        correct: s.correct,
+        total,
+      };
+    });
+  } catch (err) {
+    console.warn("[AIStudyPlan] buildCategoryData error:", err);
+    return [];
+  }
 }
 
 interface FullStats {
