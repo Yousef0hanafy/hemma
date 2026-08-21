@@ -49,10 +49,7 @@ export function StudyPlanView() {
     return <FullScreenLoader label="جارٍ تحليل أدائك…" />;
   }
 
-  const plan = result?.heuristicPlan;
-  const ai = showAIPlan ? result?.aiPlan : null;
-
-  if (!result || !plan) {
+  if (!result || !result.heuristicPlan) {
     return (
       <div className="max-w-md mx-auto my-16 p-8 text-center space-y-4 rounded-2xl border border-border bg-card shadow-sm">
         <div className="w-12 h-12 mx-auto rounded-full bg-primary/10 flex items-center justify-center text-primary">
@@ -72,6 +69,9 @@ export function StudyPlanView() {
       </div>
     );
   }
+
+  const plan = result.heuristicPlan;
+  const ai = showAIPlan ? result.aiPlan : null;
 
   return (
     <div className="max-w-4xl mx-auto space-y-6 pb-32 lg:pb-12">
