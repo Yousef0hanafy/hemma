@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { useViewStore } from "@/lib/store/view-store";
+import { useViewStore, type ViewKey } from "@/lib/store/view-store";
 import { useUserProfile } from "@/lib/hooks/use-data";
 import { toArabicDigits } from "@/lib/content/ui-helpers";
 import { cn } from "@/lib/utils";
@@ -32,7 +32,7 @@ interface TourStep {
   title: string;
   description: string;
   /** Optional action to navigate to a specific view when this step is shown */
-  navigateTo?: Parameters<ReturnType<typeof useViewStore>["setView"]>[0];
+  navigateTo?: ViewKey;
 }
 
 const STEPS: TourStep[] = [

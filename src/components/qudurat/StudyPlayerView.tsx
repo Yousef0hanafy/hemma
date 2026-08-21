@@ -195,7 +195,7 @@ function StudyPlayerInner({
         if (!isCorrect) {
           autoRegisterMistake(current.id);
         }
-        onResult(isCorrect, result.xpEarned);
+        onResult(isCorrect);
 
         if (result.xpEarned > 0) {
           toast.success(`+${toArabicDigits(result.xpEarned)} نقطة خبرة`, {
@@ -666,7 +666,7 @@ function SessionSummary({
               <div className="text-xs text-violet-600/70 dark:text-violet-400/70">
                 {nextReviewDate
                   ? relativeTimeAr(nextReviewDate)
-                  : "لا توجد مراجعات قادمة — أحسنت! 🎉"}
+                  : "لا توجد مراجعات قادمة ��� أحسنت! 🎉"}
               </div>
             </div>
           </div>

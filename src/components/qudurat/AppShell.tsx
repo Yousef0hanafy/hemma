@@ -76,7 +76,7 @@ export function AppShell() {
       {isAuthenticated && <AppNav />}
 
       <main
-        className={`flex-1 mx-auto w-full max-w-6xl px-4 py-6 ${isAuthenticated ? "lg:ps-64" : ""}`}
+        className={`flex-1 mx-auto w-full max-w-6xl px-4 py-6 ${isAuthenticated ? "pb-24 lg:pb-6 lg:ps-64" : ""}`}
       >
         <ErrorBoundary>
           <Suspense fallback={<FullScreenLoader label="جارٍ تحميل المحتوى…" />}>

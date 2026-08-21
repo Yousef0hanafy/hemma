@@ -19,6 +19,7 @@ import {
   getStatCardColor,
   getColorPalette,
 } from "@/lib/content/ui-helpers";
+import type { SpeedStatDTO } from "@/lib/content/dto";
 import {
   levelProgress,
   masteryLabel,
@@ -406,7 +407,7 @@ function ExamHistoryCard() {
           <div className="text-right">
             <h3 className="font-semibold text-sm">سجل الاختبارات</h3>
             <p className="text-xs text-muted-foreground mt-0.5">
-              {toArabicDigits(sessions.length)} اختبار · متوسط {formatPercent(avg)}
+              {toArabicDigits(sessions.length)} اختبار · متو��ط {formatPercent(avg)}
               {trend !== 0 && (
                 <span className={cn("mr-1", trend > 0 ? "text-emerald-600" : "text-rose-600")}>
                   ({trend > 0 ? "↑" : "↓"}{toArabicDigits(Math.abs(Math.round(trend)))}) 

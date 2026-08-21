@@ -11,6 +11,7 @@ import {
   RawQuestionJSON,
   RawSourceJSON,
   UNKNOWN_CATEGORY_ORDER,
+  Difficulty,
 } from "./types";
 
 // ---------------------------------------------------------------------------

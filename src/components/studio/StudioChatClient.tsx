@@ -11,7 +11,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import {
-  getSuggestions,
   getChatSessions,
   createChatSession,
   getChatSession as fetchChatSession,
@@ -41,7 +40,12 @@ import {
 // Constants
 // ---------------------------------------------------------------------------
 
-const SUGGESTIONS = await getSuggestions();
+const SUGGESTIONS: Suggestion[] = [
+  { label: "تحليل حالة الأسئلة", prompt: "حلل توزيع الأسئلة في المنصة وما الذي يمكن تحسينه؟" },
+  { label: "كيف أحسن الشرح؟", prompt: "قدم نصائح لكتابة شروحات تعليمية أفضل للأسئلة" },
+  { label: "معايير الجودة", prompt: "ما هي معايير جودة الأسئلة التعليمية التي يجب أن نتبعها؟" },
+  { label: "تحليل سؤال", prompt: "أريد تحليل سؤال محدد. سأكتب نص السؤال والخيارات" },
+];
 
 // ---------------------------------------------------------------------------
 // Helper — format markdown content for better display

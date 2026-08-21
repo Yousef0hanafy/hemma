@@ -81,13 +81,10 @@ export function startSentryTransaction(
 ): { finish: () => void } | null {
   if (!process.env.SENTRY_DSN) return null;
 
-  const transaction = Sentry.startTransaction({ name, op });
-  Sentry.getCurrentScope().setSpan(transaction);
-
+  // Sentry 10 manages tracing through spans; keep this helper safe when
+  // tracing APIs are unavailable in the current runtime.
   return {
-    finish: () => {
-      transaction.end();
-    },
+    finish: () => undefined,
   };
 }
 

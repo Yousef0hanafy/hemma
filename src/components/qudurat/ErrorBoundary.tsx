@@ -140,7 +140,7 @@ export class ErrorBoundary extends Component<Props, State> {
  * Example input: "at MyComponent (webpack-internal:///...)"
  * Example output: "MyComponent"
  */
-function extractComponentName(componentStack: string): string | undefined {
-  const match = componentStack.match(/at\s+([\w]+)/);
+function extractComponentName(componentStack: string | null | undefined): string | undefined {
+  const match = componentStack?.match(/at\s+([\w]+)/);
   return match?.[1] ?? undefined;
 }

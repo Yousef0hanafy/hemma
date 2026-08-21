@@ -42,7 +42,7 @@ export async function signupWithEmail(
 
     const parsed = signupSchema.safeParse(raw);
     if (!parsed.success) {
-      const firstError = parsed.error.errors[0]?.message ?? "بيانات غير صحيحة";
+      const firstError = parsed.error.issues[0]?.message ?? "بيانات غير صحيحة";
       return { success: false, error: firstError };
     }
 

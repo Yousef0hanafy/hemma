@@ -282,7 +282,7 @@ export async function getAIProcessingSummary(): Promise<{
     unprocessed,
     averageQuality: qualityAgg._avg.aiQualityScore ?? null,
     lowQuality,
-    recentOperations,
+    recentOperations: recentOps,
   };
 }
 

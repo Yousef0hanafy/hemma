@@ -203,7 +203,7 @@ export function AnimatedChip({
         key: pulseKey,
         initial: { scale: 0 },
         animate: { scale: [0, 1.15, 1] },
-        transition: { duration: 0.5, ease: "easeOut", delay },
+        transition: { duration: 0.5, ease: "easeOut" as const, delay },
       }
     : {};
 
@@ -229,7 +229,7 @@ export function AnimatedChip({
         <>
           {icon && icon}
           {label && <span>{label}</span>}
-          {value !== undefined && variant !== "stat" && (
+          {value !== undefined && (
             <span className="tabular-nums">{toArabicDigits(value)}</span>
           )}
         </>

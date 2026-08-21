@@ -1,9 +1,10 @@
 "use client";
 
+import { useState } from "react";
 import { useViewStore, ViewKey } from "@/lib/store/view-store";
 import { cn } from "@/lib/utils";
 import { useDueReviewCount } from "@/lib/hooks/use-data";
-import { Home, BookOpen, Timer, RefreshCw, BarChart3, Search, Trophy, Award, Bot } from "lucide-react";
+import { Home, BookOpen, Timer, RefreshCw, BarChart3, Search, Trophy, Award, Bot, MoreHorizontal } from "lucide-react";
 
 interface NavItem {
   key: string;
@@ -78,8 +79,18 @@ const NAV_ITEMS: NavItem[] = [
 export function AppNav() {
   const { view, setView } = useViewStore();
   const { data: dueCount } = useDueReviewCount();
+  const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
 
   const badge = dueCount && dueCount > 0 ? dueCount : null;
+  const primaryMobileItems = NAV_ITEMS.slice(0, 5);
+  const secondaryMobileItems = NAV_ITEMS.slice(5).concat({
+    key: "achievements",
+    labelAr: "الإنجازات",
+    icon: Trophy,
+    view: { kind: "achievements" } as ViewKey,
+    matchView: (v: ViewKey) => v.kind === "achievements",
+  });
+  const moreActive = secondaryMobileItems.some((item) => item.matchView(view));
 
   return (
     <>
@@ -128,38 +139,71 @@ export function AppNav() {
         </button>
       </nav>
 
-      {/* Mobile bottom nav (sm-md) */}
+      {/* Mobile bottom nav: keep primary destinations reachable, move secondary views into More. */}
       <nav
         className="lg:hidden fixed bottom-0 inset-x-0 z-40 glass border-t border-border/60"
         aria-label="التنقل الرئيسي"
       >
-        <div className="mx-auto max-w-md px-2 py-1 flex items-center justify-around">
-          {NAV_ITEMS.map((item) => {
+        <div className="mx-auto flex max-w-md items-center justify-around px-2 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+          {primaryMobileItems.map((item) => {
             const active = item.matchView(view);
             const Icon = item.icon;
             return (
               <button
                 key={item.key}
-                onClick={() => setView(item.view)}
+                type="button"
+                onClick={() => { setView(item.view); setMobileMoreOpen(false); }}
                 className={cn(
-                  "relative flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-lg text-[10px] font-medium transition-colors min-w-[52px]",
-                  active
-                    ? "text-primary"
-                    : "text-muted-foreground hover:text-foreground"
+                  "relative flex min-w-14 flex-col items-center gap-0.5 rounded-lg px-2 py-1.5 text-[10px] font-medium transition-colors",
+                  active ? "text-primary" : "text-muted-foreground hover:text-foreground"
                 )}
                 aria-current={active ? "page" : undefined}
               >
-                <Icon className={cn("h-5 w-5", active && "scale-110")} />
+                <Icon className={cn("size-5", active && "scale-110")} aria-hidden="true" />
                 <span>{item.labelAr}</span>
                 {item.key === "revision" && badge !== null && (
-                  <span className="absolute -top-1 -right-1 inline-flex items-center justify-center h-4 min-w-[14px] rounded-full bg-rose-500 text-[8px] font-bold text-white px-1 tabular-nums">
+                  <span className="absolute -right-1 -top-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[8px] font-bold text-destructive-foreground tabular-nums">
                     {badge > 99 ? "99+" : badge}
                   </span>
                 )}
               </button>
             );
           })}
+          <button
+            type="button"
+            onClick={() => setMobileMoreOpen((open) => !open)}
+            className={cn(
+              "flex min-w-14 flex-col items-center gap-0.5 rounded-lg px-2 py-1.5 text-[10px] font-medium transition-colors",
+              moreActive || mobileMoreOpen ? "text-primary" : "text-muted-foreground hover:text-foreground"
+            )}
+            aria-expanded={mobileMoreOpen}
+            aria-controls="mobile-more-menu"
+          >
+            <MoreHorizontal className="size-5" aria-hidden="true" />
+            <span>المزيد</span>
+          </button>
         </div>
+        {mobileMoreOpen && (
+          <div id="mobile-more-menu" className="mx-auto flex max-w-md items-center justify-around border-t border-border/50 px-2 py-2" role="menu">
+            {secondaryMobileItems.map((item) => {
+              const active = item.matchView(view);
+              const Icon = item.icon;
+              return (
+                <button
+                  key={item.key}
+                  type="button"
+                  role="menuitem"
+                  onClick={() => { setView(item.view); setMobileMoreOpen(false); }}
+                  className={cn("flex min-w-16 flex-col items-center gap-0.5 rounded-lg px-2 py-1 text-[10px] font-medium", active ? "text-primary" : "text-muted-foreground")}
+                  aria-current={active ? "page" : undefined}
+                >
+                  <Icon className="size-5" aria-hidden="true" />
+                  <span>{item.labelAr}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
       </nav>
     </>
   );

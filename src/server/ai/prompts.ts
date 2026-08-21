@@ -40,7 +40,7 @@ ${optionsText}
 الإجابة الصحيحة: "${params.correctKey}"
 الشرح: ${params.explanation ?? "(غير موجود)"}
 مستوى الصعوبة: ${params.difficulty === "easy" ? "سهل" : params.difficulty === "medium" ? "متوسط" : "صعب"}
-الوسوم: ${(params.tags ?? []).length > 0 ? params.tags.join(", ") : "(بدون)"}
+الوسوم: ${(params.tags ?? []).length > 0 ? (params.tags ?? []).join(", ") : "(بدون)"}
 
 # أبعاد التقييم (كل بعد من 0.0 إلى 1.0)
 1. صياغة السؤال (clarity): وضوح الصياغة وسلامتها اللغوية، هل السؤال واضح ومباشر؟
