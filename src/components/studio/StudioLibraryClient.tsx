@@ -607,14 +607,14 @@ export function StudioLibraryClient() {
       </div>
 
       {/* Search + filter toggle */}
-      <div className="flex items-center gap-2">
-        <div className="relative flex-1 max-w-md">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+        <div className="relative flex-1">
           <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="ابحث في نص السؤال..."
-            className="pr-10 h-10 rounded-xl text-sm"
+            className="pr-10 h-10 rounded-xl text-sm w-full"
           />
           {search && (
             <button
@@ -625,10 +625,10 @@ export function StudioLibraryClient() {
             </button>
           )}
         </div>
-        <div className="flex items-center gap-1.5">
+        <div className="grid grid-cols-2 sm:flex sm:items-center gap-1.5 w-full sm:w-auto">
           <div className="relative">
             <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v)}>
-              <SelectTrigger className="h-10 w-[120px] text-xs rounded-xl">
+              <SelectTrigger className="h-10 w-full sm:w-[120px] text-xs rounded-xl">
                 <SelectValue placeholder="الحالة" />
               </SelectTrigger>
               <SelectContent>
@@ -643,7 +643,7 @@ export function StudioLibraryClient() {
           </div>
           <div className="relative">
             <Select value={difficultyFilter} onValueChange={(v) => setDifficultyFilter(v)}>
-              <SelectTrigger className="h-10 w-[100px] text-xs rounded-xl">
+              <SelectTrigger className="h-10 w-full sm:w-[100px] text-xs rounded-xl">
                 <SelectValue placeholder="الصعوبة" />
               </SelectTrigger>
               <SelectContent>
@@ -656,7 +656,7 @@ export function StudioLibraryClient() {
           </div>
           <div className="relative">
             <Select value={categoryFilter} onValueChange={(v) => setCategoryFilter(v)}>
-              <SelectTrigger className="h-10 w-[130px] text-xs rounded-xl">
+              <SelectTrigger className="h-10 w-full sm:w-[130px] text-xs rounded-xl">
                 <SelectValue placeholder="التصنيف" />
               </SelectTrigger>
               <SelectContent>
@@ -671,7 +671,7 @@ export function StudioLibraryClient() {
           </div>
           <div className="relative">
             <Select value={sourceFilter} onValueChange={(v) => setSourceFilter(v)}>
-              <SelectTrigger className="h-10 w-[130px] text-xs rounded-xl">
+              <SelectTrigger className="h-10 w-full sm:w-[130px] text-xs rounded-xl">
                 <SelectValue placeholder="المصدر" />
               </SelectTrigger>
               <SelectContent>
@@ -748,15 +748,15 @@ export function StudioLibraryClient() {
             {...fadeUp}
             exit={{ opacity: 0, y: -8 }}
             transition={springEntrance}
-            className="flex items-center gap-2 p-3 rounded-xl bg-primary/5 border border-primary/20"
+            className="flex items-center gap-2 p-3 rounded-xl bg-primary/5 border border-primary/20 overflow-x-auto"
           >
-            <span className="text-sm font-medium text-primary me-2">
+            <span className="text-sm font-medium text-primary me-2 whitespace-nowrap">
               {toArabicDigits(selectedIds.size)} سؤال محدد:
             </span>
             <Button
               variant="outline"
               size="sm"
-              className="h-8 text-xs"
+              className="h-8 text-xs shrink-0"
               onClick={() => setShowBulkStatus(true)}
             >
               <CheckCircle2 className="h-3.5 w-3.5 me-1" />
@@ -765,7 +765,7 @@ export function StudioLibraryClient() {
             <Button
               variant="outline"
               size="sm"
-              className="h-8 text-xs"
+              className="h-8 text-xs shrink-0"
               onClick={() => setShowBulkCategory(true)}
             >
               <Tag className="h-3.5 w-3.5 me-1" />
@@ -774,7 +774,7 @@ export function StudioLibraryClient() {
             <Button
               variant="outline"
               size="sm"
-              className="h-8 text-xs"
+              className="h-8 text-xs shrink-0"
               onClick={() => setShowBulkDelete(true)}
             >
               <Trash2 className="h-3.5 w-3.5 me-1 text-destructive" />
@@ -783,7 +783,7 @@ export function StudioLibraryClient() {
             <Button
               variant="ghost"
               size="sm"
-              className="h-8 text-xs ms-auto"
+              className="h-8 text-xs ms-auto shrink-0"
               onClick={() => setSelectedIds(new Set())}
             >
               إلغاء التحديد
@@ -795,7 +795,7 @@ export function StudioLibraryClient() {
       {/* Table */}
       <div className="rounded-xl border border-border bg-card overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full">
+          <table className="w-full min-w-[720px]">
             <thead>
               {table.getHeaderGroups().map((headerGroup) => (
                 <tr key={headerGroup.id} className="border-b border-border/50 bg-muted/30">
