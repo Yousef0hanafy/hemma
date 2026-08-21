@@ -19,9 +19,30 @@ export async function requireStudioAccess(): Promise<string> {
     throw new Error("يجب تسجيل الدخول أولاً");
   }
 
-  const role = (session.user as any).role as string;
+  let role = (session.user as any).role as string;
+  const userEmail = session.user.email?.toLowerCase();
+
+  // If user does not have studio role, check if they are the first user / project owner
   if (!(STUDIO_ROLES as readonly string[]).includes(role)) {
-    throw new Error("ليس لديك صلاحية الوصول إلى الاستوديو");
+    try {
+      const adminEmail = process.env.ADMIN_EMAIL?.toLowerCase();
+      const adminCount = await db.user.count({ where: { role: "admin" } });
+
+      if ((adminEmail && userEmail === adminEmail) || adminCount === 0) {
+        await db.user.update({
+          where: { id: session.user.id },
+          data: { role: "admin" },
+        });
+        role = "admin";
+        (session.user as any).role = "admin";
+      }
+    } catch {
+      // Ignore fallback check errors
+    }
+  }
+
+  if (!(STUDIO_ROLES as readonly string[]).includes(role)) {
+    throw new Error("ليس لديك صلاحية الوصول إلى الاستوديو (مطلوب حساب مدير أو محرر)");
   }
 
   return session.user.id;
@@ -53,9 +74,29 @@ export async function requireAdminAccess(
     throw new Error("يجب تسجيل الدخول أولاً");
   }
 
-  const role = (session.user as any).role as string;
+  let role = (session.user as any).role as string;
+  const userEmail = session.user.email?.toLowerCase();
+
   if (role !== "admin") {
-    throw new Error(errorMessage ?? "ليس لديك صلاحية الوصول إلى هذه الميزة");
+    try {
+      const adminEmail = process.env.ADMIN_EMAIL?.toLowerCase();
+      const adminCount = await db.user.count({ where: { role: "admin" } });
+
+      if ((adminEmail && userEmail === adminEmail) || adminCount === 0) {
+        await db.user.update({
+          where: { id: session.user.id },
+          data: { role: "admin" },
+        });
+        role = "admin";
+        (session.user as any).role = "admin";
+      }
+    } catch {
+      // Ignore fallback check errors
+    }
+  }
+
+  if (role !== "admin") {
+    throw new Error(errorMessage ?? "ليس لديك صلاحية الوصول إلى هذه الميزة (مطلوب حساب مدير)");
   }
 
   return session.user.id;

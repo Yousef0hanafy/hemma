@@ -51,16 +51,21 @@ export interface SettingsDTO {
 export async function getSettings(): Promise<SettingsDTO> {
   await requireStudioAccess();
 
-  const stored = await db.studioSetting.findMany();
-  const storedMap = new Map(stored.map((s) => [s.key, s.value]));
+  try {
+    const stored = await db.studioSetting.findMany();
+    const storedMap = new Map(stored.map((s) => [s.key, s.value]));
 
-  // Merge: defaults win if no stored value exists
-  const merged: SettingsDTO = {};
-  for (const [key, defaultValue] of Object.entries(DEFAULT_SETTINGS)) {
-    merged[key] = storedMap.get(key) ?? defaultValue;
+    // Merge: defaults win if no stored value exists
+    const merged: SettingsDTO = {};
+    for (const [key, defaultValue] of Object.entries(DEFAULT_SETTINGS)) {
+      merged[key] = storedMap.get(key) ?? defaultValue;
+    }
+
+    return merged;
+  } catch (err) {
+    console.warn("[StudioSettings] Fallback to default settings due to:", err);
+    return { ...DEFAULT_SETTINGS };
   }
-
-  return merged;
 }
 
 // ---------------------------------------------------------------------------
