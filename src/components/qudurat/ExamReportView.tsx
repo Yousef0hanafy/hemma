@@ -47,18 +47,6 @@ export function ExamReportView({
   const { shareRef, handleShare, isSharing } = useShareAsImage("نتيجة-الاختبار.png");
   const [showDeepReview, setShowDeepReview] = useState(false);
 
-  // Deep review mode — show one question at a time
-  if (showDeepReview) {
-    return (
-      <ExamDeepReviewView
-        questionIds={questionIds}
-        selections={selections}
-        actualDurationSec={actualDurationSec}
-        onBack={() => setShowDeepReview(false)}
-      />
-    );
-  }
-
   const stats = useMemo(() => {
     if (!questions) return null;
     let correct = 0;
@@ -102,6 +90,18 @@ export function ExamReportView({
       })),
     };
   }, [questions, selections]);
+
+  // Deep review mode — show one question at a time after all hooks run.
+  if (showDeepReview) {
+    return (
+      <ExamDeepReviewView
+        questionIds={questionIds}
+        selections={selections}
+        actualDurationSec={actualDurationSec}
+        onBack={() => setShowDeepReview(false)}
+      />
+    );
+  }
 
   if (!questions || !stats) {
     return <FullScreenLoader label="جارٍ احتساب النتيجة…" />;

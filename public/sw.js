@@ -10,7 +10,7 @@
 //   - Everything else:                           NetworkFirst → cache fallback
 // =====================================================================
 
-const CACHE_NAME = "hemma-cache-v1";
+const CACHE_NAME = "hemma-cache-v2";
 const PRECACHE_URLS = [
   "/",
   "/manifest.webmanifest",
@@ -20,17 +20,6 @@ const PRECACHE_URLS = [
 const CACHEABLE_TYPES = new Set(["basic", "cors"]);
 
 // ── Helpers ──────────────────────────────────────────────────────────────
-
-/** Simple string hash for creating cache keys from POST bodies. */
-function hashStr(str) {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    const char = str.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
-    hash = hash & hash;
-  }
-  return Math.abs(hash).toString(36);
-}
 
 // ── Install ──────────────────────────────────────────────────────────────
 self.addEventListener("install", (event) => {
@@ -148,11 +137,12 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // ── Server Action POST responses (question data, profile, etc.) ──
-  // These are the data-fetching endpoints the app relies on.
-  // Cache by URL + body hash so identical requests can be served when offline.
-  if (request.method === "POST") {
-    event.respondWith(cachedPostRequest(request));
+  // Never cache POST requests. Server Actions include authenticated reads and
+  // mutations; replaying or serving them from a shared cache can expose stale
+  // user data or duplicate a write. Offline mutations must fail visibly and be
+  // retried by the app with an idempotency key when supported.
+  if (request.method !== "GET" && request.method !== "HEAD") {
+    event.respondWith(fetch(request));
     return;
   }
 
@@ -209,44 +199,3 @@ async function networkFirstWithShellFallback(request) {
   }
 }
 
-// ── Cached POST Request (Server Actions) ─────────────────────────────────
-// Build a cache key from URL + body hash so the same server action
-// (with same parameters) can be replayed from cache when offline.
-async function cachedPostRequest(request) {
-  // Clone so we can read the body
-  const reqClone = request.clone();
-  let bodyText = "";
-  try {
-    bodyText = await reqClone.text();
-  } catch {
-    bodyText = "";
-  }
-
-  // Build a valid cache URL: original URL + __body hash param
-  const bodyHash = hashStr(bodyText);
-  const separator = request.url.includes("?") ? "&" : "?";
-  const cacheUrl = request.url + separator + "__body=" + bodyHash;
-  const cacheReq = new Request(cacheUrl);
-
-  try {
-    const response = await fetch(request.clone());
-    if (response.ok && CACHEABLE_TYPES.has(response.type)) {
-      const cache = await caches.open(CACHE_NAME);
-      cache.put(cacheReq, response.clone());
-    }
-    return response;
-  } catch {
-    // Offline — try to serve from cache
-    const cache = await caches.open(CACHE_NAME);
-    const cached = await cache.match(cacheReq);
-    if (cached) return cached;
-    // Return a 503 JSON error so the app can handle it gracefully
-    return new Response(
-      JSON.stringify({ error: "offline" }),
-      {
-        status: 503,
-        headers: { "Content-Type": "application/json" },
-      }
-    );
-  }
-}

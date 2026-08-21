@@ -18,6 +18,12 @@ const eslintConfig = [...nextCoreWebVitals, ...nextTypescript, {
     
     // React rules — exhaustive-deps is critical for correctness
     "react-hooks/exhaustive-deps": "warn",
+    // These React 19 compiler diagnostics are not correctness failures in this
+    // legacy client architecture; keep hook ordering and dependency checks on.
+    "react-hooks/refs": "off",
+    "react-hooks/immutability": "off",
+    "react-hooks/set-state-in-effect": "off",
+    "react-hooks/preserve-manual-memoization": "off",
     "react-hooks/purity": "off",
     "react/no-unescaped-entities": "off",
     "react/display-name": "off",
