@@ -28,66 +28,72 @@ export function AppHeader({ onDrawerToggle }: { onDrawerToggle?: () => void }) {
 
   return (
     <header className="glass sticky top-0 z-40 border-b border-border/60">
-      <div className="mx-auto max-w-6xl px-4 py-3 flex items-center justify-between gap-3">
-        {/* Mobile: hamburger (sm-md) */}
-        <button
-          onClick={onDrawerToggle}
-          className="lg:hidden flex items-center justify-center h-10 w-10 rounded-xl hover:bg-secondary transition-colors"
-          aria-label="فتح القائمة"
-          aria-controls="mobile-drawer"
-        >
-          <Menu className="h-5 w-5" />
-        </button>
+      <div className="mx-auto max-w-6xl px-3 sm:px-4 py-2.5 sm:py-3 flex items-center justify-between gap-2 sm:gap-3">
+        {/* Left side (RTL: Right side): Menu + Brand */}
+        <div className="flex items-center gap-1.5 sm:gap-2.5 min-w-0">
+          {/* Mobile: hamburger (sm-md) */}
+          <button
+            onClick={onDrawerToggle}
+            className="lg:hidden flex items-center justify-center h-9 w-9 rounded-xl hover:bg-secondary transition-colors shrink-0"
+            aria-label="فتح القائمة"
+            aria-controls="mobile-drawer"
+          >
+            <Menu className="h-5 w-5" />
+          </button>
 
-        {/* Logo / Title */}
-        <button
-          onClick={() => setView({ kind: "dashboard" })}
-          className="flex items-center gap-2.5 group"
-          aria-label="الصفحة الرئيسية — منصة همّة التعليمية"
-        >
-          <div className="relative h-10 w-10 sm:h-11 sm:w-11 rounded-xl bg-white dark:bg-white/10 grid place-items-center shadow-sm ring-1 ring-border/50 overflow-hidden transition-transform group-hover:scale-105 group-active:scale-95">
-            <img
-              src="/logo-splash.png"
-              alt=""
-              aria-hidden="true"
-              width={36}
-              height={36}
-              className="h-7 w-7 sm:h-8 sm:w-8 object-contain"
-              draggable={false}
-            />
-          </div>
-          <div className="text-right">
-            <div className="font-display text-base sm:text-lg font-bold leading-tight text-foreground">
-              منصة همّة التعليمية
+          {/* Logo / Title */}
+          <button
+            onClick={() => setView({ kind: "dashboard" })}
+            className="flex items-center gap-2 group min-w-0"
+            aria-label="الصفحة الرئيسية — منصة همّة التعليمية"
+          >
+            <div className="relative h-9 w-9 sm:h-10 sm:w-10 rounded-xl bg-white dark:bg-white/10 grid place-items-center shadow-sm ring-1 ring-border/50 overflow-hidden transition-transform group-hover:scale-105 group-active:scale-95 shrink-0">
+              <img
+                src="/logo-splash.png"
+                alt=""
+                aria-hidden="true"
+                width={36}
+                height={36}
+                className="h-7 w-7 sm:h-8 sm:w-8 object-contain"
+                draggable={false}
+              />
             </div>
-            <div className="text-[10px] text-muted-foreground leading-tight hidden sm:block">
-              التحضير المتميّز لاختبار القدرات
+            <div className="text-right min-w-0">
+              <div className="font-display text-sm sm:text-base font-bold leading-tight text-foreground truncate">
+                منصة همّة التعليمية
+              </div>
+              <div className="text-[10px] text-muted-foreground leading-tight hidden sm:block">
+                التحضير المتميّز لاختبار القدرات
+              </div>
             </div>
-          </div>
-        </button>
+          </button>
+        </div>
 
-        {/* Auth + Stats chips */}
-        <div className="flex items-center gap-1.5 sm:gap-2">
-          {/* Theme toggle */}
-          <ThemeToggle />
+        {/* Right side (RTL: Left side): Stats chips + Auth */}
+        <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+          {/* Theme toggle — visible on tablet/desktop */}
+          <div className="hidden sm:block">
+            <ThemeToggle />
+          </div>
+
           {/* Streak chip */}
           <TooltipProvider delayDuration={200}>
             <Tooltip>
               <TooltipTrigger asChild>
                 <div
-                  className={`flex items-center gap-1 rounded-full px-2.5 py-1.5 text-xs font-semibold border ${
+                  className={`flex items-center gap-1 rounded-full px-2 py-1 sm:px-2.5 sm:py-1.5 text-xs font-semibold border ${
                     profile && profile.currentStreak > 0
                       ? "bg-orange-50 dark:bg-orange-950/30 border-orange-200 dark:border-orange-900 text-orange-700 dark:text-orange-300"
                       : "bg-muted border-border text-muted-foreground"
                   }`}
                 >
                   <Flame
-                    className={`h-3.5 w-3.5 ${
+                    className={`h-3.5 w-3.5 shrink-0 ${
                       profile && profile.currentStreak > 0 ? "flame-active" : ""
                     }`}
                     fill={profile && profile.currentStreak > 0 ? "currentColor" : "none"}
                   />
-                  <span className="tabular-nums">
+                  <span className="tabular-nums font-bold">
                     <AnimatedNumber value={profile?.currentStreak ?? 0} />
                   </span>
                 </div>
@@ -107,9 +113,9 @@ export function AppHeader({ onDrawerToggle }: { onDrawerToggle?: () => void }) {
           <TooltipProvider delayDuration={200}>
             <Tooltip>
               <TooltipTrigger asChild>
-                <div className="flex items-center gap-1 rounded-full px-2.5 py-1.5 text-xs font-semibold border bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-900 text-amber-700 dark:text-amber-300">
-                  <Star className="h-3.5 w-3.5" fill="currentColor" />
-                  <span className="tabular-nums">
+                <div className="flex items-center gap-1 rounded-full px-2 py-1 sm:px-2.5 sm:py-1.5 text-xs font-semibold border bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-900 text-amber-700 dark:text-amber-300">
+                  <Star className="h-3.5 w-3.5 text-amber-500 fill-amber-500 shrink-0" />
+                  <span className="tabular-nums font-bold">
                     <AnimatedNumber value={profile?.totalXp ?? 0} />
                   </span>
                 </div>
@@ -125,7 +131,7 @@ export function AppHeader({ onDrawerToggle }: { onDrawerToggle?: () => void }) {
             </Tooltip>
           </TooltipProvider>
 
-          {/* Level badge */}
+          {/* Level badge (desktop) */}
           {lp && (
             <button
               onClick={() => setView({ kind: "achievements" })}
@@ -136,25 +142,27 @@ export function AppHeader({ onDrawerToggle }: { onDrawerToggle?: () => void }) {
             </button>
           )}
 
-          {/* Auth button */}
+          {/* Auth button / Avatar */}
           {session?.user ? (
             <TooltipProvider delayDuration={200}>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <div className="flex items-center gap-0">
+                  <div className="flex items-center gap-0.5">
                     <button
                       onClick={() => setView({ kind: "profile" })}
-                      className="flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-xs font-semibold border bg-card border-border hover:bg-muted transition-colors"
+                      className="flex items-center gap-1.5 rounded-full p-0.5 sm:px-2.5 sm:py-1 text-xs font-semibold border bg-card border-border hover:bg-muted transition-colors"
                       aria-label="الملف الشخصي"
                     >
                       {session.user.image ? (
                         <img
                           src={session.user.image}
                           alt=""
-                          className="h-5 w-5 rounded-full"
+                          className="h-6 w-6 sm:h-5 sm:w-5 rounded-full object-cover"
                         />
                       ) : (
-                        <User className="h-3.5 w-3.5" />
+                        <div className="h-6 w-6 sm:h-5 sm:w-5 rounded-full bg-muted flex items-center justify-center">
+                          <User className="h-3.5 w-3.5 text-muted-foreground" />
+                        </div>
                       )}
                       <span className="hidden sm:inline max-w-20 truncate">
                         {session.user.name ?? ""}
@@ -162,7 +170,7 @@ export function AppHeader({ onDrawerToggle }: { onDrawerToggle?: () => void }) {
                     </button>
                     <button
                       onClick={() => signOut()}
-                      className="p-1.5 rounded-full hover:bg-muted transition-colors text-muted-foreground"
+                      className="hidden sm:flex p-1.5 rounded-full hover:bg-muted transition-colors text-muted-foreground"
                       aria-label="تسجيل الخروج"
                     >
                       <LogOut className="h-3.5 w-3.5" />
