@@ -171,26 +171,27 @@ export function AppShell() {
 
 function AppFooter() {
   return (
-    <footer className="mt-auto border-t border-border/60 bg-muted/30">
-      <div className="mx-auto max-w-6xl px-4 py-5 flex flex-col items-center gap-2 text-center">
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+    <footer className="mt-auto border-t border-border/40 bg-card/30 backdrop-blur-sm py-3.5">
+      <div className="mx-auto max-w-6xl px-4 flex flex-col sm:flex-row items-center justify-between gap-2.5 text-center sm:text-start text-xs text-muted-foreground">
+        {/* Brand */}
+        <div className="flex items-center gap-2">
           <img
             src="/logo-splash.png"
             alt=""
             aria-hidden="true"
-            width={20}
-            height={20}
+            width={18}
+            height={18}
             loading="lazy"
-            className="h-5 w-5 object-contain opacity-80"
+            className="h-4.5 w-4.5 object-contain opacity-80"
             draggable={false}
           />
-          <span className="font-semibold">منصة همّة التعليمية</span>
-          <span className="opacity-50">·</span>
-          <span>التحضير المتميّز لاختبار القدرات اللفظية</span>
+          <span className="font-semibold text-foreground/85 text-xs">منصة همّة التعليمية</span>
+          <span className="opacity-40 hidden sm:inline">·</span>
+          <span className="text-[11px] opacity-75 hidden sm:inline">التحضير المتميّز لاختبار القدرات اللفظية</span>
         </div>
 
-        {/* Legal links */}
-        <div className="flex items-center gap-3 text-xs text-muted-foreground/80">
+        {/* Links & Dev credits */}
+        <div className="flex items-center gap-3 text-[11px]">
           <Link
             href="/terms"
             className="hover:text-foreground transition-colors underline-offset-2 hover:underline"
@@ -204,21 +205,21 @@ function AppFooter() {
           >
             سياسة الخصوصية
           </Link>
-        </div>
-
-        <div className="text-[11px] text-muted-foreground/80 flex items-center gap-1.5">
-          <span>Developed By</span>
-          <a
-            href="https://portfolio-yousef-hanafy.vercel.app/"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="font-semibold text-foreground/80 hover:text-primary underline-offset-2 hover:underline transition-colors"
-            aria-label="Youssef Hanafy — يفتح في تبويب جديد"
-          >
-            Youssef Hanafy
-          </a>
-          <span className="opacity-50">·</span>
-          <span>© {new Date().getFullYear()}</span>
+          <span className="opacity-30">·</span>
+          <div dir="ltr" className="inline-flex items-center gap-1 text-muted-foreground/85">
+            <span>© {new Date().getFullYear()}</span>
+            <span className="opacity-40">·</span>
+            <span>Developed by</span>
+            <a
+              href="https://portfolio-yousef-hanafy.vercel.app/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-semibold text-foreground hover:text-primary transition-colors underline-offset-2 hover:underline"
+              aria-label="Youssef Hanafy — يفتح في تبويب جديد"
+            >
+              Youssef Hanafy
+            </a>
+          </div>
         </div>
       </div>
     </footer>

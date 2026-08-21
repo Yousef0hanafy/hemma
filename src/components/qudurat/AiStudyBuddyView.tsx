@@ -522,9 +522,9 @@ export function AiStudyBuddyView() {
 
   // ── Render ───────────────────────────────────────────────────
   return (
-    <div className="relative max-w-3xl mx-auto pb-32 lg:pb-12 flex flex-col h-[calc(100dvh-12rem)]">
+    <div className="relative w-full max-w-5xl mx-auto flex flex-col h-[calc(100dvh-8rem)] sm:h-[calc(100dvh-8.5rem)] pb-2">
       {/* ── Header ── */}
-      <div className="flex items-center justify-between mb-4 shrink-0">
+      <div className="flex items-center justify-between mb-3 shrink-0 px-1">
         <button
           onClick={() => back()}
           className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
@@ -550,7 +550,7 @@ export function AiStudyBuddyView() {
           <button
             onClick={toggleSidebar}
             className={cn(
-              "flex items-center gap-1 text-xs px-2 py-1.5 rounded-lg transition-colors",
+              "flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg transition-colors",
               sidebarOpen
                 ? "bg-violet-500/10 text-violet-600 dark:text-violet-400"
                 : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
@@ -565,7 +565,7 @@ export function AiStudyBuddyView() {
           {messages.length > 0 && (
             <button
               onClick={handleNewChat}
-              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors px-2 py-1.5 rounded-lg hover:bg-muted/50"
+              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors px-2.5 py-1.5 rounded-lg hover:bg-muted/50"
               title="محادثة جديدة"
             >
               <RefreshCw className="h-3.5 w-3.5" />
@@ -577,7 +577,7 @@ export function AiStudyBuddyView() {
       </div>
 
       {/* ── Messages area ── */}
-      <div className="flex-1 overflow-y-auto space-y-3 px-1 scrollbar-thin">
+      <div className="flex-1 overflow-y-auto space-y-4 px-2 sm:px-4 py-2 scrollbar-thin">
         {/* Restoring session loader */}
         {restoring && (
           <div className="flex items-center justify-center py-20">
@@ -634,7 +634,7 @@ export function AiStudyBuddyView() {
 
                 <div
                   className={cn(
-                    "max-w-[80%] rounded-2xl px-4 py-3 text-sm leading-relaxed",
+                    "max-w-[92%] sm:max-w-[88%] rounded-2xl px-5 py-3.5 text-sm sm:text-base leading-relaxed",
                     msg.role === "user"
                       ? "bg-primary text-primary-foreground rounded-tl-sm"
                       : "bg-muted/60 text-foreground rounded-tr-sm"
