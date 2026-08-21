@@ -43,7 +43,7 @@ import {
   Monitor,
 } from "lucide-react";
 import { AnimatedNumber } from "./shared/AnimatedNumber";
-import { signOut } from "next-auth/react";
+import { signOut, useSession, signIn } from "next-auth/react";
 import { useState, useRef, useCallback, useEffect } from "react";
 import {
   supportsNotifications,
@@ -60,7 +60,8 @@ import { Button } from "@/components/ui/button";
 
 export function ProfileView() {
   const { setView, back } = useViewStore();
-  const { data: profile, loading } = useServerData<ExtendedProfile | null>(
+  const { data: session, status: sessionStatus } = useSession();
+  const { data: rawProfile, loading } = useServerData<ExtendedProfile | null>(
     "extended-profile",
     fetchExtendedProfile
   );
@@ -73,11 +74,12 @@ export function ProfileView() {
   const [gearSpinning, setGearSpinning] = useState(false);
   const { data: goals, refresh: refreshGoals } = useServerData<GoalsWithProgress | null>("learning-goals", fetchLearningGoals);
 
-  if (loading) {
+  if (loading || sessionStatus === "loading") {
     return <FullScreenLoader label="جارٍ تحميل الملف الشخصي…" />;
   }
 
-  if (!profile) {
+  // If user is truly not logged in
+  if (!session && !rawProfile && sessionStatus === "unauthenticated") {
     return (
       <div className="max-w-md mx-auto my-16 p-8 text-center space-y-4 rounded-2xl border border-border bg-card shadow-sm">
         <div className="w-12 h-12 mx-auto rounded-full bg-primary/10 flex items-center justify-center text-primary">
@@ -87,12 +89,45 @@ export function ProfileView() {
         <p className="text-sm text-muted-foreground">
           سجل دخولك لحفظ تقدمك ومتابعة إحصائياتك وإنجازاتك الشخصية.
         </p>
-        <Button onClick={() => setView({ kind: "dashboard" })} className="w-full">
-          العودة للرئيسية
-        </Button>
+        <div className="flex flex-col sm:flex-row gap-2 pt-2">
+          <Button onClick={() => signIn()} className="flex-1">
+            تسجيل الدخول
+          </Button>
+          <Button variant="outline" onClick={() => setView({ kind: "dashboard" })} className="flex-1">
+            العودة للرئيسية
+          </Button>
+        </div>
       </div>
     );
   }
+
+  // Use loaded profile or authenticated session fallback
+  const profile: ExtendedProfile = rawProfile || {
+    userId: (session?.user as any)?.id || "user",
+    name: session?.user?.name || "طالب همة",
+    email: session?.user?.email || null,
+    image: session?.user?.image || null,
+    role: (session?.user as any)?.role || "student",
+    createdAt: new Date().toISOString(),
+    totalXp: 0,
+    level: 1,
+    currentStreak: 0,
+    longestStreak: 0,
+    streakShields: 1,
+    levelProgress: { level: 1, pct: 0, nextLevelXp: 100 },
+    totalAttempts: 0,
+    correctAttempts: 0,
+    overallAccuracy: null,
+    totalExamSessions: 0,
+    bestExamScore: null,
+    avgExamScore: null,
+    totalReviewsDone: 0,
+    avgTimePerQuestion: null,
+    achievements: [],
+    unlockedSlugs: [],
+    categoryMastery: [],
+    recentActivity: [],
+  };
 
   return (
     <div className="max-w-4xl mx-auto space-y-6 pb-32 lg:pb-12">
