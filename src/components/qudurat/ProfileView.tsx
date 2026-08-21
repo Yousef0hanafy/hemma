@@ -56,6 +56,8 @@ import type { GoalsWithProgress, GoalType } from "@/server/actions/learning-goal
 import { ThemeToggle } from "./ThemeToggle";
 import { useTheme } from "next-themes";
 
+import { Button } from "@/components/ui/button";
+
 export function ProfileView() {
   const { setView, back } = useViewStore();
   const { data: profile, loading } = useServerData<ExtendedProfile | null>(
@@ -71,8 +73,25 @@ export function ProfileView() {
   const [gearSpinning, setGearSpinning] = useState(false);
   const { data: goals, refresh: refreshGoals } = useServerData<GoalsWithProgress | null>("learning-goals", fetchLearningGoals);
 
-  if (loading || !profile) {
+  if (loading) {
     return <FullScreenLoader label="جارٍ تحميل الملف الشخصي…" />;
+  }
+
+  if (!profile) {
+    return (
+      <div className="max-w-md mx-auto my-16 p-8 text-center space-y-4 rounded-2xl border border-border bg-card shadow-sm">
+        <div className="w-12 h-12 mx-auto rounded-full bg-primary/10 flex items-center justify-center text-primary">
+          <Shield className="h-6 w-6" />
+        </div>
+        <h2 className="text-lg font-bold">يرجى تسجيل الدخول</h2>
+        <p className="text-sm text-muted-foreground">
+          سجل دخولك لحفظ تقدمك ومتابعة إحصائياتك وإنجازاتك الشخصية.
+        </p>
+        <Button onClick={() => setView("dashboard")} className="w-full">
+          العودة للرئيسية
+        </Button>
+      </div>
+    );
   }
 
   return (
