@@ -220,7 +220,203 @@ function StatusBadge({ status }: { status: string }) {
 // Expanded row detail
 // ---------------------------------------------------------------------------
 
-function ExpandedRowDetail({ entry }: { entry: AuditLogEntry }) {
+function FormattedQualityResult({ data }: { data: any }) {
+  const overall = typeof data.overall === "number" ? data.overall : null;
+  const dimensions = Array.isArray(data.dimensions) ? data.dimensions : [];
+  const issues = Array.isArray(data.issues) ? data.issues : [];
+  const suggestions = Array.isArray(data.suggestions) ? data.suggestions : [];
+
+  return (
+    <div className="space-y-3">
+      {/* Overall Score */}
+      {overall !== null && (
+        <div className="flex items-center justify-between p-2.5 rounded-lg bg-background border">
+          <div className="space-y-0.5">
+            <span className="font-semibold text-xs">الدرجة الإجمالية للجودة</span>
+            <p className="text-[10px] text-muted-foreground">
+              {overall >= 0.8
+                ? "جودة ممتازة متوافقة مع المعايير"
+                : overall >= 0.5
+                ? "جودة مقبولة مع بعض الملاحظات"
+                : "تحتاج إلى مراجعة وتعديل"}
+            </p>
+          </div>
+          <Badge
+            variant="outline"
+            className={cn(
+              "font-bold text-xs px-2.5 py-1",
+              overall >= 0.8
+                ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border-emerald-300"
+                : overall >= 0.5
+                ? "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 border-amber-300"
+                : "bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300 border-rose-300"
+            )}
+          >
+            {Math.round(overall * 100)}%
+          </Badge>
+        </div>
+      )}
+
+      {/* Dimensions Bars */}
+      {dimensions.length > 0 && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          {dimensions.map((dim: any, i: number) => {
+            const score = typeof dim.score === "number" ? dim.score : 0;
+            const pct = Math.round(score * 100);
+            return (
+              <div key={i} className="p-2 rounded-lg bg-background/80 border space-y-1.5">
+                <div className="flex justify-between items-center text-[11px]">
+                  <span className="font-medium text-foreground">{dim.label || dim.name}</span>
+                  <span className="font-bold tabular-nums text-muted-foreground">{pct}%</span>
+                </div>
+                <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
+                  <div
+                    className={cn(
+                      "h-full rounded-full transition-all",
+                      pct >= 80 ? "bg-emerald-500" : pct >= 50 ? "bg-amber-500" : "bg-rose-500"
+                    )}
+                    style={{ width: `${pct}%` }}
+                  />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Issues List */}
+      {issues.length > 0 && (
+        <div className="space-y-1.5">
+          <p className="font-semibold text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1">
+            <AlertCircle className="h-3.5 w-3.5" />
+            الملاحظات المستخرجة ({issues.length}):
+          </p>
+          <div className="space-y-1">
+            {issues.map((iss: any, i: number) => (
+              <div
+                key={i}
+                className="p-2 rounded-md bg-amber-50/60 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/50 text-amber-800 dark:text-amber-200 text-xs flex items-start gap-1.5"
+              >
+                <span className="font-bold text-[10px] bg-amber-200/60 dark:bg-amber-900/60 px-1.5 py-0.5 rounded shrink-0">
+                  {iss.field || "عام"}
+                </span>
+                <span>{iss.message || JSON.stringify(iss)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Suggestions */}
+      {suggestions.length > 0 && (
+        <div className="space-y-1.5">
+          <p className="font-semibold text-xs text-primary flex items-center gap-1">
+            <Sparkles className="h-3.5 w-3.5" />
+            التوصيات:
+          </p>
+          <ul className="list-disc list-inside space-y-0.5 text-xs text-muted-foreground pr-1">
+            {suggestions.map((sug: any, i: number) => (
+              <li key={i}>{typeof sug === "string" ? sug : JSON.stringify(sug)}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function FormattedResult({ result, operation }: { result: any; operation: string }) {
+  const [showRaw, setShowRaw] = useState(false);
+
+  if (typeof result !== "object" || result === null) {
+    return <div className="text-xs text-muted-foreground">{String(result)}</div>;
+  }
+
+  // Quality check custom view
+  if (operation === "quality_check" || result.overall !== undefined || result.dimensions) {
+    return (
+      <div className="space-y-2">
+        <FormattedQualityResult data={result} />
+        <div className="pt-1">
+          <button
+            onClick={() => setShowRaw(!showRaw)}
+            className="text-[10px] text-muted-foreground hover:text-foreground underline transition-colors"
+          >
+            {showRaw ? "إخفاء التفاصيل البرمجية الخام" : "عرض التفاصيل البرمجية الخام (JSON)"}
+          </button>
+          {showRaw && (
+            <pre className="mt-1.5 bg-background rounded border p-2 font-mono text-[10px] whitespace-pre-wrap max-h-36 overflow-y-auto" dir="ltr">
+              {JSON.stringify(result, null, 2)}
+            </pre>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // Difficulty estimation view
+  if (operation === "estimate_difficulty" || result.difficulty) {
+    const diffMap: Record<string, string> = { easy: "سهل", medium: "متوسط", hard: "صعب" };
+    return (
+      <div className="space-y-2">
+        <div className="flex items-center gap-2 p-2.5 rounded-lg bg-background border text-xs">
+          <span className="font-semibold">الصعوبة المقدرة:</span>
+          <Badge variant="outline" className="font-bold">
+            {diffMap[result.difficulty] || result.difficulty}
+          </Badge>
+          {result.confidence && (
+            <span className="text-muted-foreground mr-auto text-[11px]">
+              نسبة الثقة: {Math.round(result.confidence * 100)}%
+            </span>
+          )}
+        </div>
+        {result.reasoning && (
+          <div className="p-2.5 rounded-lg bg-muted/40 border text-xs text-muted-foreground">
+            {result.reasoning}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Explanation view
+  if (operation === "generate_explanation" || result.explanation) {
+    return (
+      <div className="space-y-2">
+        {result.explanation && (
+          <div className="p-2.5 rounded-lg bg-background border text-xs space-y-1">
+            <span className="font-semibold text-[11px] text-muted-foreground">الشرح المولد:</span>
+            <p className="leading-relaxed text-foreground">{result.explanation}</p>
+          </div>
+        )}
+        {result.studyTip && (
+          <div className="p-2.5 rounded-lg bg-primary/5 border border-primary/20 text-xs space-y-1">
+            <span className="font-semibold text-[11px] text-primary">فائدة دراسية:</span>
+            <p className="leading-relaxed text-foreground">{result.studyTip}</p>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Generic object summary
+  return (
+    <div className="space-y-2">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+        {Object.entries(result).map(([k, v]) => (
+          <div key={k} className="p-2 rounded-lg bg-background border text-xs">
+            <span className="text-[10px] text-muted-foreground block truncate">{k}</span>
+            <span className="font-semibold text-foreground truncate block">
+              {typeof v === "object" ? JSON.stringify(v) : String(v)}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ExpandedRowDetail({ entry }: { entry: any }) {
   const hasResult = entry.result;
   const hasError = entry.error;
   const hasDuration = entry.durationMs !== null;
@@ -229,72 +425,58 @@ function ExpandedRowDetail({ entry }: { entry: AuditLogEntry }) {
   if (hasResult) {
     try {
       parsedResult = JSON.parse(entry.result!);
-    } catch {
-      // not valid JSON, show raw
-    }
+    } catch {}
   }
 
   return (
-    <div className="p-4 bg-muted/30 rounded-lg space-y-3 text-xs">
+    <div className="p-4 bg-muted/30 rounded-xl space-y-3 text-xs border border-border/50">
       {/* Metadata row */}
-      <div className="flex flex-wrap gap-4 text-muted-foreground">
-        <span className="flex items-center gap-1">
-          <Clock className="h-3 w-3" />
+      <div className="flex flex-wrap gap-4 text-muted-foreground text-xs pb-1 border-b border-border/40">
+        <span className="flex items-center gap-1.5">
+          <Clock className="h-3.5 w-3.5 text-primary" />
           {relativeTimeAr(entry.createdAt)}
         </span>
         {hasDuration && (
-          <span className="flex items-center gap-1">
-            <Timer className="h-3 w-3" />
-            {entry.durationLabel}
+          <span className="flex items-center gap-1.5">
+            <Timer className="h-3.5 w-3.5 text-amber-500" />
+            المدة: {entry.durationLabel}
           </span>
         )}
         {entry.sourceTitle && (
-          <span className="flex items-center gap-1">
-            <FileText className="h-3 w-3" />
-            {entry.sourceTitle}
+          <span className="flex items-center gap-1.5">
+            <FileText className="h-3.5 w-3.5 text-blue-500" />
+            المصدر: {entry.sourceTitle}
           </span>
         )}
         {entry.questionId && (
-          <span className="flex items-center gap-1 font-mono text-[10px]">
-            ID: {entry.questionId.slice(0, 8)}...
+          <span className="flex items-center gap-1.5 font-mono text-[11px]">
+            معرف السؤال: {entry.questionId}
           </span>
         )}
       </div>
 
       {/* Result details */}
       {parsedResult && (
-        <div className="space-y-1.5">
-          <p className="font-medium text-[11px] text-muted-foreground uppercase tracking-wider">
-            النتيجة
-          </p>
-          <div className="bg-background rounded border p-2.5 font-mono text-[10px] whitespace-pre-wrap max-h-40 overflow-y-auto">
-            {JSON.stringify(parsedResult, null, 2)}
-          </div>
-        </div>
+        <FormattedResult result={parsedResult} operation={entry.operation} />
       )}
 
       {/* Error */}
       {hasError && (
         <div className="space-y-1.5">
-          <p className="font-medium text-[11px] text-rose-600 uppercase tracking-wider flex items-center gap-1">
-            <AlertCircle className="h-3 w-3" />
-            الخطأ
+          <p className="font-semibold text-xs text-rose-600 flex items-center gap-1">
+            <AlertCircle className="h-3.5 w-3.5" />
+            تفاصيل الخطأ:
           </p>
-          <div className="bg-rose-50 dark:bg-rose-950/50 text-rose-700 dark:text-rose-300 rounded border border-rose-200 dark:border-rose-800 p-2.5 text-[11px] leading-relaxed">
+          <div className="bg-rose-50 dark:bg-rose-950/50 text-rose-700 dark:text-rose-300 rounded-lg border border-rose-200 dark:border-rose-800 p-3 text-xs leading-relaxed">
             {entry.error}
           </div>
         </div>
       )}
 
-      {/* Raw result (if not parsed) */}
+      {/* Raw result if not parsed */}
       {hasResult && !parsedResult && (
-        <div className="space-y-1.5">
-          <p className="font-medium text-[11px] text-muted-foreground uppercase tracking-wider">
-            النتيجة الخام
-          </p>
-          <div className="bg-background rounded border p-2.5 font-mono text-[10px] whitespace-pre-wrap max-h-32 overflow-y-auto">
-            {entry.result}
-          </div>
+        <div className="p-3 bg-background rounded-lg border text-xs leading-relaxed">
+          {entry.result}
         </div>
       )}
     </div>
@@ -329,10 +511,6 @@ const DATE_RANGE_OPTIONS = [
 ];
 
 const PAGE_SIZE = 25;
-
-// ---------------------------------------------------------------------------
-// Main component
-// ---------------------------------------------------------------------------
 
 export function StudioAuditClient() {
   // ── Filters ──────────────────────────────────────────────────
@@ -448,7 +626,6 @@ export function StudioAuditClient() {
             variant="outline"
             size="sm"
             onClick={() => auditQ.refetch()}
-            disabled={auditQ.isFetching}
           >
             <RefreshCw
               className={cn(
@@ -496,7 +673,6 @@ export function StudioAuditClient() {
             variant="outline"
             size="sm"
             onClick={() => auditQ.refetch()}
-            disabled={auditQ.isFetching}
           >
             <RefreshCw
               className={cn(
@@ -577,7 +753,7 @@ export function StudioAuditClient() {
                 <span className="text-muted-foreground font-medium">
                   حسب النوع:
                 </span>
-                {summary.operationsByType.map((o) => (
+                {summary.operationsByType.map((o: any) => (
                   <Badge
                     key={o.operation}
                     variant="secondary"
@@ -602,7 +778,7 @@ export function StudioAuditClient() {
                 <span className="text-muted-foreground font-medium">
                   حسب الحالة:
                 </span>
-                {summary.operationsByStatus.map((s) => (
+                {summary.operationsByStatus.map((s: any) => (
                   <Badge
                     key={s.status}
                     variant="secondary"
@@ -695,7 +871,7 @@ export function StudioAuditClient() {
             <SelectItem value="__all__" className="text-xs">
               جميع المصادر
             </SelectItem>
-            {data?.availableSources.map((s) => (
+            {data?.availableSources.map((s: any) => (
               <SelectItem key={s.id} value={s.id} className="text-xs">
                 {s.title}
               </SelectItem>
@@ -797,25 +973,17 @@ export function StudioAuditClient() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-[140px] text-xs">
-                    العملية
-                  </TableHead>
-                  <TableHead className="w-[100px] text-xs">
-                    الحالة
-                  </TableHead>
-                  <TableHead className="text-xs">المصدر</TableHead>
-                  <TableHead className="text-xs">الملخص</TableHead>
-                  <TableHead className="w-[80px] text-xs text-start">
-                    المدة
-                  </TableHead>
-                  <TableHead className="w-[100px] text-xs text-start">
-                    التاريخ
-                  </TableHead>
-                  <TableHead className="w-8" />
+                  <TableHead className="w-[18%] text-xs">العملية</TableHead>
+                  <TableHead className="w-[12%] text-xs">الحالة</TableHead>
+                  <TableHead className="w-[22%] text-xs">المصدر</TableHead>
+                  <TableHead className="w-[24%] text-xs">الملخص</TableHead>
+                  <TableHead className="w-[10%] text-xs text-start">المدة</TableHead>
+                  <TableHead className="w-[10%] text-xs text-start">التاريخ</TableHead>
+                  <TableHead className="w-[4%] text-end" />
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {entries.map((entry) => {
+                {entries.map((entry: any) => {
                   const isExpanded = expandedId === entry.id;
                   const hasDetails =
                     entry.result || entry.error || entry.durationMs !== null;
@@ -831,20 +999,20 @@ export function StudioAuditClient() {
                         )}
                         onClick={() => handleToggleExpand(entry.id)}
                       >
-                        <TableCell className="py-2.5">
+                        <TableCell className="w-[18%] py-2.5">
                           <OperationBadge operation={entry.operation} />
                         </TableCell>
-                        <TableCell className="py-2.5">
+                        <TableCell className="w-[12%] py-2.5">
                           <StatusBadge status={entry.status} />
                         </TableCell>
-                        <TableCell className="py-2.5 text-xs text-muted-foreground max-w-[160px] truncate">
+                        <TableCell className="w-[22%] py-2.5 text-xs text-muted-foreground truncate">
                           {entry.sourceTitle ?? (
                             <span className="text-muted-foreground/50">—</span>
                           )}
                         </TableCell>
-                        <TableCell className="py-2.5 text-xs max-w-[200px]">
+                        <TableCell className="w-[24%] py-2.5 text-xs">
                           {entry.resultSummary ? (
-                            <span className="text-muted-foreground truncate block">
+                            <span className="text-muted-foreground truncate block font-medium">
                               {entry.resultSummary}
                             </span>
                           ) : entry.error ? (
@@ -857,13 +1025,13 @@ export function StudioAuditClient() {
                             <span className="text-muted-foreground/50">—</span>
                           )}
                         </TableCell>
-                        <TableCell className="py-2.5 text-xs tabular-nums text-muted-foreground text-start">
+                        <TableCell className="w-[10%] py-2.5 text-xs tabular-nums text-muted-foreground text-start">
                           {entry.durationLabel}
                         </TableCell>
-                        <TableCell className="py-2.5 text-xs text-muted-foreground text-start whitespace-nowrap">
+                        <TableCell className="w-[10%] py-2.5 text-xs text-muted-foreground text-start whitespace-nowrap">
                           {relativeTimeAr(entry.createdAt)}
                         </TableCell>
-                        <TableCell className="py-2.5">
+                        <TableCell className="w-[4%] py-2.5 text-end">
                           {hasDetails && (
                             <Button
                               variant="ghost"

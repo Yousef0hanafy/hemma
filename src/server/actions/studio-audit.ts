@@ -88,26 +88,39 @@ function formatDuration(ms: number | null): string {
   return `${mins}m ${secs}s`;
 }
 
+function formatIssuesCount(count: number): string {
+  if (count === 0) return "لا توجد ملاحظات";
+  if (count === 1) return "ملاحظة واحدة";
+  if (count === 2) return "ملاحظتان";
+  if (count >= 3 && count <= 10) return `${count} ملاحظات`;
+  return `${count} ملاحظة`;
+}
+
 function getResultSummary(result: string | null): string | null {
   if (!result) return null;
   try {
     const r = JSON.parse(result);
-    if (r.issues) {
-      return `${r.issues.length} ملاحظة${r.issues.length !== 1 ? "ات" : ""}`;
+    if (r.issues && Array.isArray(r.issues)) {
+      return formatIssuesCount(r.issues.length);
+    }
+    if (r.overall !== undefined) {
+      return `درجة الجودة: ${Math.round(r.overall * 100)}%`;
+    }
+    if (r.difficulty !== undefined) {
+      const diffLabel =
+        r.difficulty === "easy" ? "سهل" : r.difficulty === "medium" ? "متوسط" : "صعب";
+      return `الصعوبة: ${diffLabel}`;
     }
     if (r.total !== undefined && r.completed !== undefined) {
       return `${r.completed}/${r.total} مكتمل`;
     }
     if (r.generated !== undefined) {
-      return `${r.generated} توليد, ${r.skipped ?? 0} تخطي`;
+      return `${r.generated} تم توليده`;
     }
     if (r.updated !== undefined) {
-      return `${r.updated} تحديث`;
+      return `${r.updated} تم تحديثه`;
     }
-    if (r.overall !== undefined) {
-      return `الدرجة: ${Math.round(r.overall * 100)}%`;
-    }
-    return "✓ مكتمل";
+    return "✓ مكتمل بنجاح";
   } catch {
     return null;
   }
@@ -126,6 +139,26 @@ function getDateFilter(dateRange: string): Date | null {
   }
 }
 
+/**
+ * Sweeps any background jobs stuck in 'processing' or 'pending' longer than 5 minutes.
+ */
+export async function cleanupStuckAuditLogs(): Promise<number> {
+  await requireStudioAccess();
+  const fiveMinsAgo = new Date(Date.now() - 5 * 60 * 1000);
+  const result = await db.aIProcessingLog.updateMany({
+    where: {
+      status: { in: ["processing", "pending"] },
+      createdAt: { lt: fiveMinsAgo },
+    },
+    data: {
+      status: "failed",
+      error: "انتهت مهلة المعالجة بعد تجاوز الوقت المحدد (5 دقائق)",
+      completedAt: new Date(),
+    },
+  });
+  return result.count;
+}
+
 // ---------------------------------------------------------------------------
 // Main query
 // ---------------------------------------------------------------------------
@@ -134,6 +167,22 @@ export async function getAuditTrail(
   filter: AuditFilter
 ): Promise<AuditTrailResponse> {
   await requireStudioAccess();
+
+  // Auto-sweep stuck jobs older than 5 minutes
+  try {
+    const fiveMinsAgo = new Date(Date.now() - 5 * 60 * 1000);
+    await db.aIProcessingLog.updateMany({
+      where: {
+        status: { in: ["processing", "pending"] },
+        createdAt: { lt: fiveMinsAgo },
+      },
+      data: {
+        status: "failed",
+        error: "انتهت مهلة المعالجة بعد تجاوز الوقت المحدد (5 دقائق)",
+        completedAt: new Date(),
+      },
+    });
+  } catch {}
 
   const { operation, status, sourceId, search, dateRange, page, pageSize } =
     filter;
