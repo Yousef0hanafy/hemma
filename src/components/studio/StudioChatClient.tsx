@@ -258,6 +258,8 @@ function SessionItem({
 // ---------------------------------------------------------------------------
 // Time helper
 // ---------------------------------------------------------------------------
+// Time helper
+// ---------------------------------------------------------------------------
 
 function timeAgo(date: Date): string {
   const diff = Date.now() - new Date(date).getTime();
@@ -289,7 +291,7 @@ export function StudioChatClient() {
   >([]);
   const [loadingSessions, setLoadingSessions] = useState(true);
   const [loadingMessages, setLoadingMessages] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [initialLoadDone, setInitialLoadDone] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -297,6 +299,13 @@ export function StudioChatClient() {
 
   // Track whether we've auto-titled the session
   const hasAutoTitled = useRef(false);
+
+  // Default sidebar open on large screens
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.innerWidth >= 768) {
+      setSidebarOpen(true);
+    }
+  }, []);
 
   // ── Load sessions on mount ────────────────────────────────────
 
@@ -375,6 +384,9 @@ export function StudioChatClient() {
       setInput("");
       hasAutoTitled.current = false;
       await refreshSessions();
+      if (typeof window !== "undefined" && window.innerWidth < 768) {
+        setSidebarOpen(false);
+      }
       inputRef.current?.focus();
     } catch {
       toast.error("فشل إنشاء محادثة جديدة");
@@ -385,8 +397,16 @@ export function StudioChatClient() {
 
   const handleSelectSession = useCallback(
     async (id: string) => {
-      if (id === sessionId) return;
+      if (id === sessionId) {
+        if (typeof window !== "undefined" && window.innerWidth < 768) {
+          setSidebarOpen(false);
+        }
+        return;
+      }
       await loadSession(id);
+      if (typeof window !== "undefined" && window.innerWidth < 768) {
+        setSidebarOpen(false);
+      }
     },
     [sessionId, loadSession]
   );
@@ -592,107 +612,144 @@ export function StudioChatClient() {
     );
   }
 
+  // ── Sidebar Content Sub-component ────────────────────────────
+  const renderSidebarContent = (isMobile = false) => (
+    <div className="w-full h-full flex flex-col bg-card/60 md:bg-muted/20 rounded-xl border border-border/50">
+      {/* Sidebar header */}
+      <div className="flex items-center justify-between px-3 pt-3 pb-2">
+        <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+          سجل المحادثات
+        </h3>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => setSidebarOpen(false)}
+          className="h-6 w-6"
+        >
+          <PanelLeftClose className="h-3.5 w-3.5" />
+        </Button>
+      </div>
+
+      {/* New chat button */}
+      <div className="px-3 pb-2">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleNewChat}
+          className="w-full gap-1.5 text-xs h-8 bg-background"
+        >
+          <Plus className="h-3.5 w-3.5" />
+          محادثة جديدة
+        </Button>
+      </div>
+
+      {/* Session list */}
+      <ScrollArea className="flex-1 px-1">
+        <div className="space-y-0.5 pb-2">
+          {sessions.length === 0 ? (
+            <p className="text-xs text-muted-foreground text-center py-8 px-3">
+              لا توجد محادثات سابقة
+            </p>
+          ) : (
+            sessions.map((s) => (
+              <SessionItem
+                key={s.id}
+                session={s}
+                active={s.id === sessionId}
+                onSelect={handleSelectSession}
+                onDelete={handleDeleteSession}
+              />
+            ))
+          )}
+        </div>
+      </ScrollArea>
+    </div>
+  );
+
   // ── Render ────────────────────────────────────────────────────
 
   return (
-    <div className="flex gap-4 h-[calc(100vh-6rem)]">
-      {/* ── Session sidebar ──────────────────────────────────────── */}
+    <div className="relative flex gap-4 h-[calc(100vh-8rem)] sm:h-[calc(100vh-6rem)] w-full overflow-hidden">
+      {/* ── Mobile Drawer Backdrop & Sheet ────────────────────────── */}
+      <AnimatePresence>
+        {sidebarOpen && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setSidebarOpen(false)}
+              className="fixed inset-0 bg-black/60 z-40 backdrop-blur-xs md:hidden"
+            />
+            <motion.div
+              initial={{ x: "100%" }}
+              animate={{ x: 0 }}
+              exit={{ x: "100%" }}
+              transition={{ type: "spring", damping: 25, stiffness: 280 }}
+              className="fixed inset-y-0 right-0 z-50 w-[290px] max-w-[85vw] bg-card p-3 shadow-2xl md:hidden flex flex-col"
+            >
+              {renderSidebarContent(true)}
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* ── Desktop Session sidebar ──────────────────────────────── */}
       <motion.aside
         initial={false}
         animate={{
           width: sidebarOpen ? 260 : 0,
           opacity: sidebarOpen ? 1 : 0,
-          marginLeft: sidebarOpen ? 0 : -8,
         }}
         transition={springEntrance}
-        className="shrink-0 overflow-hidden"
+        className="hidden md:flex shrink-0 overflow-hidden"
       >
-        <div className="w-[260px] h-full flex flex-col bg-muted/20 rounded-xl border border-border/50">
-          {/* Sidebar header */}
-          <div className="flex items-center justify-between px-3 pt-3 pb-2">
-            <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-              المحادثات
-            </h3>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setSidebarOpen(false)}
-              className="h-6 w-6"
-            >
-              <PanelLeftClose className="h-3.5 w-3.5" />
-            </Button>
-          </div>
-
-          {/* New chat button */}
-          <div className="px-3 pb-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleNewChat}
-              className="w-full gap-1.5 text-xs h-8"
-            >
-              <Plus className="h-3.5 w-3.5" />
-              محادثة جديدة
-            </Button>
-          </div>
-
-          {/* Session list */}
-          <ScrollArea className="flex-1 px-1">
-            <div className="space-y-0.5">
-              {sessions.length === 0 ? (
-                <p className="text-xs text-muted-foreground text-center py-8 px-3">
-                  لا توجد محادثات سابقة
-                </p>
-              ) : (
-                sessions.map((s) => (
-                  <SessionItem
-                    key={s.id}
-                    session={s}
-                    active={s.id === sessionId}
-                    onSelect={handleSelectSession}
-                    onDelete={handleDeleteSession}
-                  />
-                ))
-              )}
-            </div>
-          </ScrollArea>
+        <div className="w-[260px] h-full">
+          {renderSidebarContent(false)}
         </div>
       </motion.aside>
 
       {/* ── Main chat area ───────────────────────────────────────── */}
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col min-w-0 h-full w-full">
         {/* Chat header */}
-        <div className="flex items-center justify-between mb-3 shrink-0">
-          <div className="flex items-center gap-2">
-            {/* Open sidebar button (when closed) */}
-            {!sidebarOpen && (
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setSidebarOpen(true)}
-                className="h-7 w-7"
-              >
-                <PanelLeftOpen className="h-3.5 w-3.5" />
-              </Button>
-            )}
-            <BrainCircuit className="h-5 w-5 text-emerald-500" />
-            <h1 className="text-lg font-bold">المساعد الذكي</h1>
-            <Sparkles className="h-3.5 w-3.5 text-amber-400" />
+        <div className="flex items-center justify-between mb-3 shrink-0 gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setSidebarOpen((prev) => !prev)}
+              className="h-8 gap-1.5 text-xs shrink-0"
+              title={sidebarOpen ? "إخفاء المحادثات" : "عرض المحادثات"}
+            >
+              <MessageSquare className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">المحادثات</span>
+              {sessions.length > 0 && (
+                <span className="text-[10px] bg-primary/10 text-primary font-bold px-1.5 py-0.2 rounded-full">
+                  {sessions.length}
+                </span>
+              )}
+            </Button>
+            <div className="flex items-center gap-1.5 truncate">
+              <BrainCircuit className="h-5 w-5 text-emerald-500 shrink-0" />
+              <h1 className="text-sm sm:text-base font-bold truncate">المساعد الذكي</h1>
+              <Sparkles className="h-3.5 w-3.5 text-amber-400 shrink-0 hidden sm:inline" />
+            </div>
           </div>
-          <div className="flex items-center gap-2">
+
+          <div className="flex items-center gap-2 shrink-0">
             {sessionId && (
-              <span className="text-[10px] text-muted-foreground bg-muted/50 px-2 py-0.5 rounded-full">
-                {sessions.find((s) => s.id === sessionId)?.title?.slice(0, 20) ?? "..."}
+              <span className="text-[10px] text-muted-foreground bg-muted/50 px-2 py-0.5 rounded-full hidden sm:inline truncate max-w-[120px]">
+                {sessions.find((s) => s.id === sessionId)?.title ?? "..."}
               </span>
             )}
             <Button
               variant="ghost"
               size="sm"
               onClick={handleClear}
-              className="text-xs text-muted-foreground"
+              className="h-8 text-xs text-muted-foreground hover:text-foreground gap-1"
             >
-              <Plus className="h-3.5 w-3.5 ml-1" />
-              جديد
+              <Plus className="h-3.5 w-3.5" />
+              <span>جديد</span>
             </Button>
           </div>
         </div>
@@ -707,20 +764,20 @@ export function StudioChatClient() {
           </div>
         ) : messages.length === 0 ? (
           /* ── Empty state ─────────────────────────────────── */
-          <div className="flex-1 flex flex-col items-center justify-center space-y-6 max-w-xl mx-auto w-full px-4">
-            <Card className="border-emerald-200 dark:border-emerald-800 bg-emerald-50/50 dark:bg-emerald-950/20 w-full">
-              <CardContent className="p-6 text-center">
-                <div className="w-16 h-16 rounded-2xl bg-emerald-100 dark:bg-emerald-900 flex items-center justify-center mx-auto mb-4">
-                  <BrainCircuit className="h-8 w-8 text-emerald-500" />
+          <div className="flex-1 flex flex-col items-center justify-center p-2 sm:p-4 max-w-xl mx-auto w-full overflow-y-auto">
+            <Card className="border-emerald-200/60 dark:border-emerald-800/40 bg-emerald-50/30 dark:bg-emerald-950/20 w-full shadow-sm">
+              <CardContent className="p-4 sm:p-6 text-center">
+                <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-2xl bg-emerald-100 dark:bg-emerald-900/50 flex items-center justify-center mx-auto mb-3 sm:mb-4">
+                  <BrainCircuit className="h-6 w-6 sm:h-8 sm:w-8 text-emerald-500" />
                 </div>
-                <h2 className="text-lg font-semibold mb-2">
+                <h2 className="text-base sm:text-lg font-bold mb-1.5">
                   مرحباً بك في المساعد الذكي
                 </h2>
-                <p className="text-sm text-muted-foreground max-w-md mx-auto mb-6">
+                <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed max-w-md mx-auto mb-4 sm:mb-6">
                   يمكنك سؤال المساعد عن تحليل الأسئلة، اقتراح تحسينات،
                   معايير الجودة، أو أي استفسار متعلق بالمحتوى التعليمي
                 </p>
-                <div className="flex flex-wrap justify-center gap-2 max-w-lg mx-auto">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full max-w-md mx-auto">
                   {SUGGESTIONS.map((s) => (
                     <SuggestionChip
                       key={s.label}
@@ -734,7 +791,7 @@ export function StudioChatClient() {
           </div>
         ) : (
           /* ── Messages view ──────────────────────────────── */
-          <div className="flex-1 overflow-y-auto space-y-4 pb-4 scroll-smooth">
+          <div className="flex-1 overflow-y-auto space-y-4 pb-4 scroll-smooth px-1">
             <AnimatePresence initial={false}>
               {messages.map((msg, i) => (
                 <ChatMessageBubble
@@ -767,14 +824,14 @@ export function StudioChatClient() {
 
         {/* ── Input area ──────────────────────────────────── */}
         {!loadingMessages && (
-          <div className="flex items-center gap-2 pt-3 border-t border-border/50 shrink-0">
+          <div className="flex items-center gap-2 pt-2 sm:pt-3 border-t border-border/50 shrink-0">
             <Input
               ref={inputRef}
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="اكتب رسالتك هنا..."
-              className="h-12 text-sm px-4 rounded-xl"
+              className="h-11 sm:h-12 text-sm px-3 sm:px-4 rounded-xl flex-1 bg-background"
               dir="rtl"
               disabled={sending}
             />
@@ -782,7 +839,7 @@ export function StudioChatClient() {
               onClick={handleSend}
               disabled={sending || !input.trim() || loadingMessages}
               size="icon"
-              className="h-12 w-12 rounded-xl shrink-0"
+              className="h-11 sm:h-12 w-11 sm:w-12 rounded-xl shrink-0 bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
             >
               {sending ? (
                 <Loader2 className="h-5 w-5 animate-spin" />
