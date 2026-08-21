@@ -15,12 +15,11 @@ export function AchievementsView() {
   const { setView } = useViewStore();
   const { data: achievements, loading: achievementsLoading } = useAchievements();
   const { data: profile, loading: profileLoading } = useUserProfile();
+  const { shareRef, handleShare, isSharing } = useShareAsImage("إنجازات-همّة.png");
 
   if (profileLoading || achievementsLoading) {
     return <FullScreenLoader label="جارٍ تحميل الإنجازات…" />;
   }
-
-  const { shareRef, handleShare, isSharing } = useShareAsImage("إنجازات-همّة.png");
 
   const unlocked = new Set(profile?.unlockedAchievements ?? []);
   const lp = profile ? levelProgress(profile.totalXp) : null;

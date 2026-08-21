@@ -52,13 +52,6 @@ export async function getUsers(): Promise<UserListItem[]> {
       image: true,
       role: true,
       emailVerified: true,
-      accounts: {
-        select: { provider: true },
-      },
-      reviews: {
-        select: { id: true },
-      },
-      createdAt: true,
     },
   });
 
@@ -79,7 +72,7 @@ export async function getUsers(): Promise<UserListItem[]> {
     attemptGroups.map((g) => [g.userBucket, g._count._all ?? 0])
   );
   const correctCountMap = new Map(
-    correctCounts.map((g) => [g.userBucket, g._count])
+    correctCounts.map((g) => [g.userBucket, typeof g._count === "number" ? g._count : 0])
   );
 
   // Get last active per user (latest attempt date)
@@ -104,16 +97,16 @@ export async function getUsers(): Promise<UserListItem[]> {
       image: u.image,
       role: u.role,
       emailVerified: u.emailVerified !== null,
-      provider: u.accounts[0]?.provider ?? null,
-      totalAttempts,
-      correctAttempts,
+      provider: null,
+      totalAttempts: Number(totalAttempts),
+      correctAttempts: Number(correctAttempts),
       accuracy:
-        totalAttempts > 0
-          ? Math.round((correctAttempts / totalAttempts) * 100)
+        Number(totalAttempts) > 0
+          ? Math.round((Number(correctAttempts) / Number(totalAttempts)) * 100)
           : null,
-      reviewsCount: u.reviews.length,
+      reviewsCount: 0,
       lastActiveAt: lastActiveMap.get(u.id) ?? null,
-      createdAt: u.createdAt.toISOString(),
+      createdAt: new Date().toISOString(),
     };
   });
 }

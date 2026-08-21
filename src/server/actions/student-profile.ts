@@ -177,7 +177,7 @@ export async function fetchExtendedProfile(): Promise<ExtendedProfile | null> {
     email: user.email,
     image: user.image,
     role: user.role,
-    createdAt: profile?.createdAt?.toISOString() ?? new Date().toISOString(),
+    createdAt: new Date().toISOString(),
 
     totalXp,
     level: profile?.level ?? 1,

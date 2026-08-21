@@ -4,6 +4,7 @@
 // =====================================================================
 
 import type { ScoringResult, DimensionScore } from "./scoring";
+import type { ArabicLetter } from "@/lib/content/types";
 import { scoreQuestion as heuristicScore } from "./scoring";
 import {
   buildQualityCheckPrompt,
@@ -25,7 +26,8 @@ function getGeminiClientInternal() {
   if (!geminiClient) {
     try {
       // Dynamic require so the app doesn't crash if package isn't installed
-      const { GoogleGenerativeAI } = require("@google/generative-ai") as any;
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { GoogleGenerativeAI } = require("@google/generative-ai");
       geminiClient = new GoogleGenerativeAI(apiKey);
       return geminiClient;
     } catch {
@@ -292,6 +294,6 @@ export async function scoreQuestionWithAI(params: {
 
   return heuristicScore({
     ...params,
-    options: params.options as Parameters<typeof heuristicScore>[0]["options"],
+    options: params.options.map((option) => ({ ...option, key: option.key as ArabicLetter })) as Parameters<typeof heuristicScore>[0]["options"],
   });
 }
