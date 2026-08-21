@@ -374,9 +374,18 @@ function SettingRow({
 export function StudioSettingsClient() {
   const queryClient = useQueryClient();
 
-  const { data: settings, isLoading, error } = useQuery({
+  const { data: settings, isLoading } = useQuery({
     queryKey: ["settings"],
-    queryFn: getSettings,
+    queryFn: async () => {
+      try {
+        const res = await getSettings();
+        return res || DEFAULT_SETTINGS;
+      } catch (e) {
+        console.warn("[SettingsClient] Error fetching settings, using defaults:", e);
+        return DEFAULT_SETTINGS;
+      }
+    },
+    initialData: DEFAULT_SETTINGS,
   });
 
   const [updating, setUpdating] = useState<string | null>(null);
@@ -432,7 +441,7 @@ export function StudioSettingsClient() {
 
   // ── Loading state ─────────────────────────────────────────────
 
-  if (isLoading) {
+  if (isLoading && !settings) {
     return (
       <div className="space-y-6">
         <Skeleton className="h-8 w-40" />
@@ -443,31 +452,6 @@ export function StudioSettingsClient() {
           ))}
         </div>
       </div>
-    );
-  }
-
-  // ── Error state ───────────────────────────────────────────────
-
-  if (error) {
-    return (
-      <Card>
-        <CardContent className="flex flex-col items-center justify-center py-12">
-          <AlertTriangle className="h-12 w-12 text-rose-400 mb-4" />
-          <p className="text-lg font-medium">حدث خطأ أثناء تحميل الإعدادات</p>
-          <p className="text-sm text-muted-foreground mt-1">
-            {(error as Error).message}
-          </p>
-          <Button
-            variant="outline"
-            className="mt-4"
-            onClick={() =>
-              queryClient.invalidateQueries({ queryKey: ["settings"] })
-            }
-          >
-            إعادة المحاولة
-          </Button>
-        </CardContent>
-      </Card>
     );
   }
 
