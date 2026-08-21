@@ -52,7 +52,7 @@ export function StudioTopBar() {
 
   return (
     <header
-      className="sticky top-0 z-30 flex h-14 items-center gap-4 border-b border-border/60 bg-background/80 backdrop-blur-sm px-4 transition-all duration-200"
+      className="sticky top-0 z-30 flex h-14 items-center justify-between gap-2 sm:gap-4 border-b border-border/60 bg-background/80 backdrop-blur-sm px-3 sm:px-4 transition-all duration-200"
     >
       {/* Sidebar toggle + brand */}
       <div className="flex items-center gap-2 shrink-0">
@@ -61,21 +61,21 @@ export function StudioTopBar() {
           href="/studio"
           className="hidden sm:flex items-center gap-1.5 text-sm font-semibold text-foreground"
         >
-          <span className="text-primary">ه</span>
-          <span className="hidden md:inline">استوديو</span>
+          <span className="text-primary font-bold">ه</span>
+          <span className="hidden md:inline">استوديو همة</span>
         </Link>
       </div>
 
       {/* Search bar */}
       <div
         className={cn(
-          "flex-1 max-w-lg mx-auto relative",
+          "flex-1 min-w-0 max-w-xs sm:max-w-lg mx-auto relative",
           searchFocused && "max-w-xl"
         )}
       >
         <div
           className={cn(
-            "flex items-center gap-2 h-9 rounded-lg border border-border bg-muted/50 px-3 transition-all",
+            "flex items-center gap-2 h-9 rounded-lg border border-border bg-muted/50 px-2.5 sm:px-3 transition-all",
             searchFocused && "border-primary/50 ring-1 ring-primary/20 bg-background"
           )}
         >
@@ -85,20 +85,19 @@ export function StudioTopBar() {
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             onKeyDown={handleSearchKeyDown}
-            placeholder="ابحث في أسئلة الاستوديو..."
-            className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground/60"
+            placeholder="ابحث في الأسئلة..."
+            className="flex-1 min-w-0 bg-transparent text-xs sm:text-sm outline-none placeholder:text-muted-foreground/60"
             onFocus={() => setSearchFocused(true)}
             onBlur={() => setSearchFocused(false)}
           />
         </div>
       </div>
 
-
-      {/* Right actions */}
-      <div className="flex items-center gap-1.5 shrink-0">
-        {/* AI Assistant status */}
+      {/* Right actions (RTL: Left side) */}
+      <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
+        {/* AI Assistant status — desktop */}
         <button
-          className="relative flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+          className="hidden sm:flex relative items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
           aria-label="مساعد الذكاء الاصطناعي"
         >
           <span className="relative flex h-2 w-2">
@@ -106,12 +105,12 @@ export function StudioTopBar() {
             <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
           </span>
           <Sparkles className="h-3.5 w-3.5" />
-          <span className="hidden sm:inline">AI</span>
+          <span>AI</span>
         </button>
 
         {/* Notifications */}
         <button
-          className="relative flex items-center justify-center h-8 w-8 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+          className="relative flex items-center justify-center h-8 w-8 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0"
           aria-label="الإشعارات"
         >
           <Bell className="h-4 w-4" />
@@ -120,14 +119,14 @@ export function StudioTopBar() {
         {/* User menu */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <button className="flex items-center gap-2 rounded-lg px-2 py-1 hover:bg-muted transition-colors">
-              <Avatar className="h-7 w-7">
+            <button className="flex items-center gap-1.5 rounded-lg p-0.5 sm:px-2 sm:py-1 hover:bg-muted transition-colors shrink-0">
+              <Avatar className="h-7 w-7 sm:h-8 sm:w-8 shrink-0 border border-border/50">
                 <AvatarImage src={user?.image ?? ""} alt={user?.name ?? ""} />
-                <AvatarFallback className="text-[10px] bg-primary/10 text-primary font-semibold">
+                <AvatarFallback className="text-[10px] sm:text-xs bg-primary/10 text-primary font-semibold">
                   {initials}
                 </AvatarFallback>
               </Avatar>
-              <span className="hidden sm:inline text-sm font-medium max-w-24 truncate">
+              <span className="hidden md:inline text-sm font-medium max-w-24 truncate">
                 {user?.name ?? "مستخدم"}
               </span>
               <ChevronDown className="h-3 w-3 text-muted-foreground hidden sm:block" />

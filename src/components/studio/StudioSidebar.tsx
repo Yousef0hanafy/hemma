@@ -71,6 +71,13 @@ const SYSTEM_ITEMS: NavItem[] = [
 
 export function StudioSidebar() {
   const pathname = usePathname();
+  const { isMobile, setOpenMobile } = useSidebar();
+
+  const handleLinkClick = () => {
+    if (isMobile) {
+      setOpenMobile(false);
+    }
+  };
 
   // ── Live badge counts — single consolidated query ────────────
   const badgeCountsQ = useQuery({
@@ -116,7 +123,11 @@ export function StudioSidebar() {
                         : item.label
                     }
                   >
-                    <Link href={item.href} className="flex items-center gap-2">
+                    <Link
+                      href={item.href}
+                      onClick={handleLinkClick}
+                      className="flex items-center gap-2"
+                    >
                       <Icon className="h-4 w-4 shrink-0" />
                       <span className="flex-1 text-right">{item.label}</span>
                       {badge !== undefined && badge > 0 && (
@@ -146,7 +157,11 @@ export function StudioSidebar() {
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" asChild>
-              <Link href="/studio" className="flex items-center gap-2">
+              <Link
+                href="/studio"
+                onClick={handleLinkClick}
+                className="flex items-center gap-2"
+              >
                 <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
                   <span className="font-bold text-sm">ه</span>
                 </div>
@@ -184,6 +199,7 @@ export function StudioSidebar() {
             <SidebarMenuButton asChild tooltip="العودة للتطبيق">
               <Link
                 href="/"
+                onClick={handleLinkClick}
                 className="flex items-center gap-2 text-muted-foreground"
               >
                 <ChevronLeft className="h-4 w-4 shrink-0" />
