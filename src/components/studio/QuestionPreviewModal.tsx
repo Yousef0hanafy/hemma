@@ -204,7 +204,7 @@ export function QuestionPreviewModal({ question, open, onOpenChange }: Props) {
               >
                 <FeedbackPanel
                   isCorrect={isCorrect}
-                  correctKey={question.correctKey}
+                  correctKey={question.correctKey as ArabicLetter}
                   explanation={question.explanation}
                   studyTip={question.studyTip}
                   confidence={confidence}

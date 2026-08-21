@@ -94,10 +94,9 @@ export async function getQuestionDetail(
 
   if (!q) return null;
 
-  // Fetch attempts accuracy
-  const accuracyAgg = await db.attempt.aggregate({
-    where: { questionId: id },
-    _avg: { isCorrect: true },
+  // Boolean fields cannot be averaged in Prisma; count correct attempts instead.
+  const correctAttemptCount = await db.attempt.count({
+    where: { questionId: id, isCorrect: true },
   });
 
   // Fetch AI processing logs
@@ -145,8 +144,8 @@ export async function getQuestionDetail(
       : null,
     attemptCount: q._count.attempts,
     attemptAccuracy:
-      accuracyAgg._avg.isCorrect !== null
-        ? Math.round(accuracyAgg._avg.isCorrect * 100)
+      q._count.attempts > 0
+        ? Math.round((correctAttemptCount / q._count.attempts) * 100)
         : null,
     aiProcessingLogs: aiLogs.map((l) => ({
       operation: l.operation,

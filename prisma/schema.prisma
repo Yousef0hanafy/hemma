@@ -385,6 +385,7 @@ model User {
   image         String?
   password      String? // hashed password for credential users (null for Google-only users)
   role          String          @default("student") // student | admin | editor | reviewer
+  createdAt     DateTime        @default(now())
   accounts      Account[]
   sessions      Session[]
   reviews       ContentReview[]

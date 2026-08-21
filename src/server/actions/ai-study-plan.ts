@@ -67,7 +67,7 @@ export async function fetchAIStudyPlan(): Promise<AIStudyPlanResult | null> {
   let aiUsed = false;
 
   if (isAIAvailable() && stats.totalAttempts > 0) {
-    const input = buildAIInput(stats, categoryData);
+    const input = await buildAIInput(stats, categoryData);
     const plan = await generateAIStudyPlan(input);
     if (plan) {
       aiPlan = { ...plan, generatedAt: new Date().toISOString() };
@@ -82,7 +82,15 @@ export async function fetchAIStudyPlan(): Promise<AIStudyPlanResult | null> {
     aiPlan,
     heuristicPlan,
     aiUsed,
-    summary: heuristicPlan?.summary ?? stats,
+    summary: heuristicPlan?.summary ?? {
+      totalAttempts: stats.totalAttempts,
+      overallAccuracy: stats.overallAccuracy,
+      dueReviewCount: stats.dueReviewCount,
+      streakDays: stats.currentStreak,
+      level: stats.level,
+      categoriesStudied: categoryData.filter((category) => category.attempted > 0).length,
+      categoriesTotal: categoryData.length,
+    },
     trend: heuristicPlan?.trend ?? "new",
     categoryData,
   };

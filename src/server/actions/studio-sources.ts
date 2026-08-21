@@ -185,6 +185,7 @@ export async function getSourcesProcessingStatus(): Promise<
   const result: Record<string, ProcessingFlags> = {};
 
   for (const log of logs) {
+    if (!log.sourceId) continue;
     if (!result[log.sourceId]) {
       result[log.sourceId] = {
         qualityDone: false,

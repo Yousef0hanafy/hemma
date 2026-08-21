@@ -558,6 +558,12 @@ export function StudioQuestionEditor({
     fetchLibraryMeta().then(setBulkMeta);
   }, []);
 
+  // ── Navigation callback ───────────────────────────────────────
+  const goTo = useCallback(
+    (id: string) => router.push(`/studio/questions/${id}`),
+    [router]
+  );
+
   // ── Keyboard shortcuts ───────────────────────────────────────────
   // j/k — prev/next, Escape — close modals, p — toggle preview
   useEffect(() => {
@@ -696,14 +702,6 @@ export function StudioQuestionEditor({
     }
   }, [question.id]);
 
-  // ── Navigation ────────────────────────────────────────────────
-
-  const goTo = useCallback(
-    (id: string) => {
-      router.push(`/studio/questions/${id}`);
-    },
-    [router]
-  );
 
   // ── Render ────────────────────────────────────────────────────
 
@@ -1128,7 +1126,7 @@ export function StudioQuestionEditor({
                         )}
                         <span className="font-medium">
                           {question.lastReview.action === "approved"
-                            ? "تمت الموافقة"
+                            ? "تمت ال��وافقة"
                             : question.lastReview.action === "rejected"
                               ? "مرفوض"
                               : "طلب تعديل"}

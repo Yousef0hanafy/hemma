@@ -65,8 +65,7 @@ export async function getUsers(): Promise<UserListItem[]> {
   // Get attempt stats by userBucket
   const attemptGroups = await db.attempt.groupBy({
     by: ["userBucket"],
-    _count: true,
-    _sum: { isCorrect: undefined as any },
+    _count: { _all: true },
   });
 
   // Get correct counts
@@ -77,7 +76,7 @@ export async function getUsers(): Promise<UserListItem[]> {
   });
 
   const attemptCountMap = new Map(
-    attemptGroups.map((g) => [g.userBucket, g._count])
+    attemptGroups.map((g) => [g.userBucket, g._count._all ?? 0])
   );
   const correctCountMap = new Map(
     correctCounts.map((g) => [g.userBucket, g._count])

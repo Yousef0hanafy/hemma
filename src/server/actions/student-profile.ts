@@ -81,7 +81,6 @@ export async function fetchExtendedProfile(): Promise<ExtendedProfile | null> {
         email: true,
         image: true,
         role: true,
-        createdAt: true,
       },
     }),
     db.userProfile.findUnique({ where: { userBucket } }),
@@ -178,7 +177,7 @@ export async function fetchExtendedProfile(): Promise<ExtendedProfile | null> {
     email: user.email,
     image: user.image,
     role: user.role,
-    createdAt: user.createdAt.toISOString(),
+    createdAt: profile?.createdAt?.toISOString() ?? new Date().toISOString(),
 
     totalXp,
     level: profile?.level ?? 1,

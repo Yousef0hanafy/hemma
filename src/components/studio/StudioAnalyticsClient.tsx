@@ -219,16 +219,16 @@ export function StudioAnalyticsClient() {
         />
         <StatCard
           label="الدقة"
-          value={overview?.avgAccuracy !== null ? formatPercent(overview!.avgAccuracy! * 100) : "—"}
+          value={overview?.avgAccuracy != null ? formatPercent(overview.avgAccuracy * 100) : "—"}
           icon={<BarChart3 className="h-5 w-5 text-cyan-600" />}
           color="bg-cyan-50 dark:bg-cyan-950/30"
         />
         <StatCard
           label="جودة AI"
-          value={overview?.avgQuality !== null ? `${Math.round(overview!.avgQuality! * 100)}%` : "—"}
+          value={overview?.avgQuality != null ? `${Math.round(overview.avgQuality * 100)}%` : "—"}
           icon={<Sparkles className="h-5 w-5 text-rose-600" />}
           color="bg-rose-50 dark:bg-rose-950/30"
-          subtitle={overview?.avgQuality !== null ? (overview.avgQuality >= 0.7 ? "ممتازة" : overview.avgQuality >= 0.4 ? "جيدة" : "بحاجة تحسين") : undefined}
+          subtitle={overview?.avgQuality != null ? (overview.avgQuality >= 0.7 ? "ممتازة" : overview.avgQuality >= 0.4 ? "جيدة" : "بحاجة تحسين") : undefined}
         />
       </div>
 

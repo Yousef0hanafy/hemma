@@ -290,5 +290,8 @@ export async function scoreQuestionWithAI(params: {
     if (aiResult) return aiResult;
   }
 
-  return heuristicScore(params);
+  return heuristicScore({
+    ...params,
+    options: params.options as Parameters<typeof heuristicScore>[0]["options"],
+  });
 }

@@ -437,7 +437,14 @@ export function StudioDashboardClient() {
     refetchInterval: 60_000,
   });
 
-  const stats = statsQ.data;
+  const stats = statsQ.data ?? {
+    pendingReview: 0,
+    inProgress: 0,
+    published: 0,
+    totalQuestions: 0,
+    todayImports: 0,
+    avgQuality: null,
+  };
   const reviewQueue = reviewQ.data ?? [];
   const recentImports = importsQ.data ?? [];
   const trend = trendQ.data ?? [];
