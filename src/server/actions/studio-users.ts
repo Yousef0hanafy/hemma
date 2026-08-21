@@ -58,43 +58,75 @@ export async function getUsers(): Promise<UserListItem[]> {
       reviews: {
         select: { id: true },
       },
+      userProfile: {
+        select: {
+          lastActiveDate: true,
+          updatedAt: true,
+          createdAt: true,
+        },
+      },
+      sessions: {
+        select: { expires: true },
+        take: 1,
+        orderBy: { expires: "desc" },
+      },
     },
   });
 
   // Get attempt stats by userBucket
   const attemptGroups = await db.attempt.groupBy({
     by: ["userBucket"],
-    _count: true,
-  });
+    _count: { id: true },
+  }).catch(() => []);
 
   // Get correct counts
   const correctCounts = await db.attempt.groupBy({
     by: ["userBucket"],
     where: { isCorrect: true },
-    _count: true,
-  });
+    _count: { id: true },
+  }).catch(() => []);
 
-  const attemptCountMap = new Map(
-    attemptGroups.map((g) => [g.userBucket, g._count])
-  );
-  const correctCountMap = new Map(
-    correctCounts.map((g) => [g.userBucket, g._count])
-  );
+  const attemptCountMap = new Map<string, number>();
+  for (const g of attemptGroups) {
+    attemptCountMap.set(g.userBucket, g._count.id);
+  }
+
+  const correctCountMap = new Map<string, number>();
+  for (const g of correctCounts) {
+    correctCountMap.set(g.userBucket, g._count.id);
+  }
 
   // Get last active per user (latest attempt date)
-  // Use unquoted identifiers to avoid PostgreSQL case-sensitivity with node-postgres
-  const lastActiveResults = await db.$queryRaw<{ userbucket: string; maxdate: Date }[]>`
-     SELECT "userBucket" as userbucket, MAX("createdAt") as maxdate
-     FROM attempts
-     GROUP BY "userBucket"
-  `;
-  const lastActiveMap = new Map(
-    lastActiveResults.map((r) => [r.userbucket, r.maxdate.toISOString()])
-  );
+  let lastActiveMap = new Map<string, string>();
+  try {
+    const lastActiveResults = await db.$queryRaw<{ userbucket: string; maxdate: Date }[]>`
+       SELECT "userBucket" as userbucket, MAX("createdAt") as maxdate
+       FROM attempts
+       GROUP BY "userBucket"
+    `;
+    lastActiveMap = new Map(
+      lastActiveResults.map((r) => [r.userbucket, r.maxdate.toISOString()])
+    );
+  } catch (err) {
+    console.warn("[StudioUsers] Raw query for attempts lastActive failed:", err);
+  }
 
   return users.map((u) => {
     const totalAttempts = attemptCountMap.get(u.id) ?? 0;
     const correctAttempts = correctCountMap.get(u.id) ?? 0;
+
+    // Calculate best last active timestamp
+    let lastActiveAt: string | null = lastActiveMap.get(u.id) ?? null;
+    if (!lastActiveAt && u.userProfile?.updatedAt) {
+      lastActiveAt = u.userProfile.updatedAt.toISOString();
+    } else if (!lastActiveAt && u.userProfile?.lastActiveDate) {
+      lastActiveAt = new Date(u.userProfile.lastActiveDate).toISOString();
+    }
+
+    const createdAt =
+      u.userProfile?.createdAt?.toISOString() ??
+      lastActiveAt ??
+      new Date().toISOString();
 
     return {
       id: u.id,
@@ -111,8 +143,8 @@ export async function getUsers(): Promise<UserListItem[]> {
           ? Math.round((correctAttempts / totalAttempts) * 100)
           : null,
       reviewsCount: u.reviews.length,
-      lastActiveAt: lastActiveMap.get(u.id) ?? null,
-      createdAt: lastActiveMap.get(u.id) ?? new Date().toISOString(),
+      lastActiveAt,
+      createdAt,
     };
   });
 }
@@ -124,38 +156,58 @@ export async function getUsers(): Promise<UserListItem[]> {
 export async function getUsersOverview(): Promise<UsersOverview> {
   await requireStudioAccess();
 
-  const [totalUsers, roleGroups, totalAttempts, correctAttempts, todayActiveStr, weekActiveStr] =
-    await Promise.all([
-      db.user.count(),
-      db.user.groupBy({ by: ["role"], _count: true }),
-      db.attempt.count(),
-      db.attempt.count({ where: { isCorrect: true } }),
-      db.$queryRaw<{ count: bigint }[]>`
+  try {
+    const [totalUsers, roleGroups, totalAttempts, correctAttempts] =
+      await Promise.all([
+        db.user.count().catch(() => 0),
+        db.user.groupBy({ by: ["role"], _count: { id: true } }).catch(() => []),
+        db.attempt.count().catch(() => 0),
+        db.attempt.count({ where: { isCorrect: true } }).catch(() => 0),
+      ]);
+
+    let activeToday = 0;
+    let activeThisWeek = 0;
+
+    try {
+      const todayActiveStr = await db.$queryRaw<{ count: bigint }[]>`
          SELECT COUNT(DISTINCT "userBucket") as count
          FROM attempts
          WHERE "createdAt" >= NOW() - INTERVAL '24 hours'
-      `,
-      db.$queryRaw<{ count: bigint }[]>`
+      `;
+      activeToday = Number(todayActiveStr[0]?.count ?? 0);
+    } catch {}
+
+    try {
+      const weekActiveStr = await db.$queryRaw<{ count: bigint }[]>`
          SELECT COUNT(DISTINCT "userBucket") as count
          FROM attempts
          WHERE "createdAt" >= NOW() - INTERVAL '7 days'
-      `,
-    ]);
+      `;
+      activeThisWeek = Number(weekActiveStr[0]?.count ?? 0);
+    } catch {}
 
-  const activeToday = Number(todayActiveStr[0]?.count ?? 0);
-  const activeThisWeek = Number(weekActiveStr[0]?.count ?? 0);
-
-  return {
-    totalUsers,
-    byRole: roleGroups.map((g) => ({ role: g.role, count: g._count })),
-    activeToday,
-    activeThisWeek,
-    totalAttempts,
-    overallAccuracy:
-      totalAttempts > 0
-        ? Math.round((correctAttempts / totalAttempts) * 100)
-        : null,
-  };
+    return {
+      totalUsers,
+      byRole: roleGroups.map((g) => ({ role: g.role, count: g._count.id })),
+      activeToday,
+      activeThisWeek,
+      totalAttempts,
+      overallAccuracy:
+        totalAttempts > 0
+          ? Math.round((correctAttempts / totalAttempts) * 100)
+          : null,
+    };
+  } catch (err) {
+    console.warn("[StudioUsers] getUsersOverview error:", err);
+    return {
+      totalUsers: 0,
+      byRole: [],
+      activeToday: 0,
+      activeThisWeek: 0,
+      totalAttempts: 0,
+      overallAccuracy: null,
+    };
+  }
 }
 
 // ---------------------------------------------------------------------------

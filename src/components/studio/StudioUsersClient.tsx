@@ -99,16 +99,25 @@ function RoleBadge({ role }: { role: string }) {
 // ---------------------------------------------------------------------------
 
 function formatDate(dateStr: string | null): string {
-  if (!dateStr) return "—";
+  if (!dateStr) return "لم يسجل نشاطاً";
   const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return "—";
   const now = new Date();
-  const diff = now.getTime() - d.getTime();
-  const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+  const diffMs = now.getTime() - d.getTime();
+  const diffMinutes = Math.floor(diffMs / (1000 * 60));
+  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
 
-  if (days === 0) return "اليوم";
-  if (days === 1) return "أمس";
-  if (days < 7) return `منذ ${days} أيام`;
-  return d.toLocaleDateString("ar-SA");
+  if (diffMinutes < 5) return "الآن";
+  if (diffMinutes < 60) return `منذ ${diffMinutes} دقيقة`;
+  if (diffHours < 24) return `منذ ${diffHours} ساعة`;
+  if (diffDays === 1) return "أمس";
+  if (diffDays < 7) return `منذ ${diffDays} أيام`;
+  return d.toLocaleDateString("ar-SA", {
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+  });
 }
 
 function getInitials(name: string | null): string {
@@ -365,9 +374,9 @@ function UserRow({
         )}
         onClick={onToggle}
       >
-        <TableCell className="py-2.5">
+        <TableCell className="w-[32%] py-3 text-right">
           <div className="flex items-center gap-3">
-            <div className="text-muted-foreground transition-transform duration-200">
+            <div className="text-muted-foreground transition-transform duration-200 shrink-0">
               {expanded ? (
                 <ChevronUp className="h-4 w-4" />
               ) : (
@@ -392,10 +401,10 @@ function UserRow({
             </div>
           </div>
         </TableCell>
-        <TableCell className="py-2.5">
+        <TableCell className="w-[12%] py-3 text-right">
           <RoleBadge role={user.role} />
         </TableCell>
-        <TableCell className="py-2.5">
+        <TableCell className="w-[18%] py-3 text-right">
           <div
             onClick={(e) => e.stopPropagation()}
             className="flex items-center"
@@ -407,7 +416,7 @@ function UserRow({
             />
           </div>
         </TableCell>
-        <TableCell className="py-2.5">
+        <TableCell className="w-[14%] py-3 text-right">
           <div className="flex items-center gap-1.5 text-sm">
             <BookOpen className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
             <span className="font-semibold tabular-nums">
@@ -429,15 +438,15 @@ function UserRow({
             )}
           </div>
         </TableCell>
-        <TableCell className="py-2.5">
+        <TableCell className="w-[14%] py-3 text-right">
           <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-            <LogIn className="h-3.5 w-3.5 shrink-0" />
-            <span className="text-xs">{formatDate(user.lastActiveAt)}</span>
+            <LogIn className="h-3.5 w-3.5 shrink-0 text-muted-foreground/70" />
+            <span className="text-xs whitespace-nowrap">{formatDate(user.lastActiveAt)}</span>
           </div>
         </TableCell>
-        <TableCell className="py-2.5 text-start">
+        <TableCell className="w-[10%] py-3 text-center">
           <div
-            className="flex items-center justify-end gap-0.5"
+            className="flex items-center justify-center"
             onClick={(e) => e.stopPropagation()}
           >
             <DeleteUserDialog user={user} onDeleted={onDeleted} />
@@ -471,8 +480,12 @@ function UserRow({
 // Main component
 // ---------------------------------------------------------------------------
 
+const PAGE_SIZE = 20;
+
 export function StudioUsersClient() {
   const [searchQuery, setSearchQuery] = useState("");
+  const [roleFilter, setRoleFilter] = useState<string>("all");
+  const [page, setPage] = useState(1);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const queryClient = useQueryClient();
@@ -487,19 +500,33 @@ export function StudioUsersClient() {
     queryFn: getUsersOverview,
   });
 
+  // Reset page to 1 when filters change
+  const handleSearchChange = (val: string) => {
+    setSearchQuery(val);
+    setPage(1);
+  };
+
+  const handleRoleFilterChange = (role: string) => {
+    setRoleFilter(role);
+    setPage(1);
+  };
+
   const filtered = users
-    ? searchQuery.trim()
-      ? users.filter(
-          (u) =>
-            (u.name ?? "")
-              .toLowerCase()
-              .includes(searchQuery.toLowerCase()) ||
-            (u.email ?? "")
-              .toLowerCase()
-              .includes(searchQuery.toLowerCase())
-        )
-      : users
+    ? users.filter((u) => {
+        const matchesSearch =
+          !searchQuery.trim() ||
+          (u.name ?? "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+          (u.email ?? "").toLowerCase().includes(searchQuery.toLowerCase());
+
+        const matchesRole =
+          roleFilter === "all" || u.role === roleFilter;
+
+        return matchesSearch && matchesRole;
+      })
     : [];
+
+  const totalPages = Math.ceil(filtered.length / PAGE_SIZE) || 1;
+  const paginatedUsers = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   const handleToggle = useCallback((id: string) => {
     setExpandedId((prev) => (prev === id ? null : id));
@@ -560,37 +587,6 @@ export function StudioUsersClient() {
     );
   }
 
-  // ── Empty state ───────────────────────────────────────────────
-
-  if (!filtered.length) {
-    return (
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold">المستخدمين</h1>
-            <p className="text-muted-foreground text-sm mt-1">
-              إدارة المستخدمين والصلاحيات
-            </p>
-          </div>
-        </div>
-
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-16">
-            <Users className="h-16 w-16 text-muted-foreground/40 mb-4" />
-            <p className="text-lg font-medium mb-1">
-              {searchQuery ? "لا توجد نتائج للبحث" : "لا يوجد مستخدمين بعد"}
-            </p>
-            <p className="text-sm text-muted-foreground text-center max-w-sm">
-              {searchQuery
-                ? "حاول تغيير كلمة البحث"
-                : "المستخدمون يظهرون تلقائياً بعد تسجيل الدخول عبر Google"}
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
   // ── Main view ─────────────────────────────────────────────────
 
   return (
@@ -600,7 +596,7 @@ export function StudioUsersClient() {
         <div>
           <h1 className="text-2xl font-bold">المستخدمين</h1>
           <p className="text-muted-foreground text-sm mt-1">
-            {users?.length ?? 0} مستخدم — إدارة الأدوار والصلاحيات
+            {users?.length ?? 0} مستخدم مسجل — إدارة الأدوار والصلاحيات
           </p>
         </div>
       </div>
@@ -663,33 +659,40 @@ export function StudioUsersClient() {
         </Card>
       </div>
 
-      {/* Role distribution mini badges */}
-      {overview && overview.byRole.length > 0 && (
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-xs text-muted-foreground">توزيع الأدوار:</span>
-          {overview.byRole.map((r) => (
-            <Badge
-              key={r.role}
-              variant="outline"
-              className={cn(
-                "text-[11px] font-medium gap-1",
-                ROLE_MAP[r.role]?.color ?? ""
-              )}
+      {/* Role filter buttons */}
+      <div className="flex items-center gap-1.5 flex-wrap">
+        <Button
+          variant={roleFilter === "all" ? "default" : "outline"}
+          size="sm"
+          className="h-8 text-xs rounded-lg"
+          onClick={() => handleRoleFilterChange("all")}
+        >
+          الكل ({users?.length ?? 0})
+        </Button>
+        {ROLE_OPTIONS.map((r) => {
+          const count = users?.filter((u) => u.role === r.value).length ?? 0;
+          return (
+            <Button
+              key={r.value}
+              variant={roleFilter === r.value ? "default" : "outline"}
+              size="sm"
+              className="h-8 text-xs rounded-lg gap-1"
+              onClick={() => handleRoleFilterChange(r.value)}
             >
-              {ROLE_MAP[r.role]?.label ?? r.role}
-              <span className="font-bold">{r.count}</span>
-            </Badge>
-          ))}
-        </div>
-      )}
+              <span>{r.label}</span>
+              <span className="opacity-70 font-bold">({count})</span>
+            </Button>
+          );
+        })}
+      </div>
 
       {/* Search */}
       <div className="relative">
         <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input
-          placeholder="بحث في المستخدمين..."
+          placeholder="بحث بالاسم أو البريد الإلكتروني..."
           value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
+          onChange={(e) => handleSearchChange(e.target.value)}
           className="pr-10 h-10"
           dir="rtl"
         />
@@ -697,29 +700,77 @@ export function StudioUsersClient() {
 
       {/* Table */}
       <Card className="overflow-hidden">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="w-[28%]">المستخدم</TableHead>
-              <TableHead className="w-[10%]">الدور</TableHead>
-              <TableHead className="w-[18%]">تغيير الدور</TableHead>
-              <TableHead className="w-[15%]">النشاط</TableHead>
-              <TableHead className="w-[15%]">آخر ظهور</TableHead>
-              <TableHead className="w-[14%] text-start">إجراءات</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filtered.map((user) => (
-              <UserRow
-                key={user.id}
-                user={user}
-                expanded={expandedId === user.id}
-                onToggle={() => handleToggle(user.id)}
-                onDeleted={handleDeleted}
-              />
-            ))}
-          </TableBody>
-        </Table>
+        {filtered.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 text-center">
+            <Users className="h-12 w-12 text-muted-foreground/40 mb-3" />
+            <p className="text-base font-medium mb-1">
+              {searchQuery ? "لا توجد نتائج مطابقة للبحث" : "لا يوجد مستخدمون في هذا القسم"}
+            </p>
+            <p className="text-xs text-muted-foreground max-w-sm">
+              {searchQuery
+                ? "جرب البحث بكلمة أو بريد إلكتروني آخر"
+                : "المستخدمون يظهرون تلقائياً بعد تسجيل الدخول"}
+            </p>
+          </div>
+        ) : (
+          <>
+            <Table>
+              <TableHeader className="bg-muted/40">
+                <TableRow className="hover:bg-transparent">
+                  <TableHead className="w-[32%] text-right font-semibold">المستخدم</TableHead>
+                  <TableHead className="w-[12%] text-right font-semibold">الدور الحالي</TableHead>
+                  <TableHead className="w-[18%] text-right font-semibold">تعديل الدور</TableHead>
+                  <TableHead className="w-[14%] text-right font-semibold">النشاط</TableHead>
+                  <TableHead className="w-[14%] text-right font-semibold">آخر ظهور</TableHead>
+                  <TableHead className="w-[10%] text-center font-semibold">إجراءات</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {paginatedUsers.map((user) => (
+                  <UserRow
+                    key={user.id}
+                    user={user}
+                    expanded={expandedId === user.id}
+                    onToggle={() => handleToggle(user.id)}
+                    onDeleted={handleDeleted}
+                  />
+                ))}
+              </TableBody>
+            </Table>
+
+            {/* Pagination Controls */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between px-4 py-3 border-t border-border bg-muted/20">
+                <p className="text-xs text-muted-foreground">
+                  عرض {(page - 1) * PAGE_SIZE + 1} إلى {Math.min(page * PAGE_SIZE, filtered.length)} من {filtered.length} مستخدم
+                </p>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8 text-xs"
+                    disabled={page <= 1}
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  >
+                    السابق
+                  </Button>
+                  <span className="text-xs font-medium px-2">
+                    {page} / {totalPages}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8 text-xs"
+                    disabled={page >= totalPages}
+                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  >
+                    التالي
+                  </Button>
+                </div>
+              </div>
+            )}
+          </>
+        )}
       </Card>
     </div>
   );
