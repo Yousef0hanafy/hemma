@@ -18,16 +18,15 @@ import { z } from "zod";
 // -------------------------------------------------------------------
 
 export const STATIC_FREE_AI_MODELS = [
-  "meta-llama/llama-3.3-70b-instruct:free",
-  "deepseek/deepseek-r1:free",
-  "deepseek/deepseek-chat:free",
-  "google/gemini-2.0-flash-exp:free",
-  "qwen/qwen-2.5-coder-32b-instruct:free",
-  "mistralai/mistral-small-24b-instruct-2501:free",
+  "openrouter/free",
   "nvidia/nemotron-3.5-lightning:free",
   "dots-studio/dots-3-note-preview:free",
   "liquid/lfm-2.5-2.6b:free",
-  "cognitivecomputations/dolphin3.0-r1-mistral-24b:free",
+  "stealth/ox-alpha",
+  "poolside/laguna-s-2.1:free",
+  "google/gemma-4-26b-a4b-it:free",
+  "nvidia/nemotron-3-nano-30b-a3b:free",
+  "openai/gpt-oss-20b:free",
 ] as const;
 
 export const FREE_AI_MODELS = STATIC_FREE_AI_MODELS;
@@ -73,15 +72,15 @@ export async function getAvailableFreeModels(): Promise<string[]> {
         if (liveFreeIds.length > 0) {
           // Order with the most reliable instruction-tuned models first
           const preferredOrder = [
-            "meta-llama/llama-3.3-70b-instruct:free",
-            "deepseek/deepseek-r1:free",
-            "deepseek/deepseek-chat:free",
-            "google/gemini-2.0-flash-exp:free",
-            "qwen/qwen-2.5-coder-32b-instruct:free",
-            "mistralai/mistral-small-24b-instruct-2501:free",
+            "openrouter/free",
             "nvidia/nemotron-3.5-lightning:free",
             "dots-studio/dots-3-note-preview:free",
             "liquid/lfm-2.5-2.6b:free",
+            "stealth/ox-alpha",
+            "poolside/laguna-s-2.1:free",
+            "google/gemma-4-26b-a4b-it:free",
+            "nvidia/nemotron-3-nano-30b-a3b:free",
+            "openai/gpt-oss-20b:free",
           ];
 
           const prioritized = [
@@ -107,7 +106,7 @@ export function getAIModelName(): string {
   if (envModel && envModel !== "auto" && (envModel.includes("/") || envModel.includes(":free"))) {
     return envModel;
   }
-  return "meta-llama/llama-3.3-70b-instruct:free";
+  return "openrouter/free";
 }
 
 export function getAIApiKey(): string {
