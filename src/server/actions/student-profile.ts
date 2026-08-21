@@ -66,12 +66,12 @@ export async function fetchExtendedProfile(): Promise<ExtendedProfile | null> {
       return null;
     }
 
-    const userId = (session.user as any).id;
-    const userEmail = session.user.email;
+    const userId = (session.user as any).id as string | undefined;
+    const userEmail = session.user.email as string | null | undefined;
     const userBucket = userId || userEmail || "default";
 
     // 1. Fetch user from DB
-    let user = null;
+    let user: { id: string; name: string | null; email: string | null; image: string | null; role: string } | null = null;
     if (userId || userEmail) {
       user = await db.user.findFirst({
         where: {
@@ -99,7 +99,7 @@ export async function fetchExtendedProfile(): Promise<ExtendedProfile | null> {
     };
 
     // 2. Fetch / Ensure UserProfile exists
-    let profile = null;
+    let profile: { id: string; totalXp: number; level: number; currentStreak: number; longestStreak: number; streakShields: number; unlockedAchievements: string; createdAt: Date } | null = null;
     try {
       profile = await db.userProfile.findUnique({ where: { userBucket } });
       if (!profile && userId) {
@@ -273,10 +273,13 @@ async function fetchCategoryMasteryData(
     const cats = await db.category.findMany({ orderBy: { displayOrder: "asc" } });
     if (cats.length === 0) return [];
 
-    const totals = await db.question.groupBy({ by: ["categoryId"], _count: true }).catch(() => []);
-    const totalMap = new Map(totals.map((t) => [t.categoryId, t._count]));
+    const totals = await db.question.groupBy({ by: ["categoryId"], _count: { id: true } }).catch(() => []);
+    const totalMap = new Map<string, number>();
+    for (const t of totals) {
+      totalMap.set(t.categoryId, t._count.id);
+    }
 
-    let statMap = new Map<string, { attempted: number; correct: number }>();
+    const statMap = new Map<string, { attempted: number; correct: number }>();
     try {
       const userStats = await db.$queryRaw<{ categoryId: string; attempted: number; correct: number }[]>`
         SELECT q."categoryId",
@@ -288,10 +291,12 @@ async function fetchCategoryMasteryData(
         GROUP BY q."categoryId"
       `;
       if (Array.isArray(userStats)) {
-        statMap = new Map(userStats.map((s) => [s.categoryId, {
-          attempted: Number(s.attempted) || 0,
-          correct: Number(s.correct) || 0,
-        }]));
+        for (const s of userStats) {
+          statMap.set(s.categoryId, {
+            attempted: Number(s.attempted) || 0,
+            correct: Number(s.correct) || 0,
+          });
+        }
       }
     } catch {
       // Ignore query error for clean fallback

@@ -87,7 +87,7 @@ export function ProfileView() {
         <p className="text-sm text-muted-foreground">
           سجل دخولك لحفظ تقدمك ومتابعة إحصائياتك وإنجازاتك الشخصية.
         </p>
-        <Button onClick={() => setView("dashboard")} className="w-full">
+        <Button onClick={() => setView({ kind: "dashboard" })} className="w-full">
           العودة للرئيسية
         </Button>
       </div>
