@@ -47,46 +47,46 @@ export async function recordAttempt(input: RecordAttemptInput) {
 
   // Update daily activity
   const today = todayKey();
-  const existingActivity = await db.dailyActivity.findUnique({
+  const xpEarned = input.isCorrect ? 10 : 2; // give 2 XP for effort even if incorrect
+
+  await db.dailyActivity.upsert({
     where: { userBucket_date: { userBucket: userId, date: today } },
-  });
-
-  if (existingActivity) {
-    await db.dailyActivity.update({
-      where: { userBucket_date: { userBucket: userId, date: today } },
-      data: {
-        attempts: { increment: 1 },
-        correct: { increment: input.isCorrect ? 1 : 0 },
-      },
-    });
-  } else {
-    await db.dailyActivity.create({
-      data: {
-        userBucket: userId,
-        date: today,
-        attempts: 1,
-        correct: input.isCorrect ? 1 : 0,
-      },
-    });
-  }
-
-  // Update user profile XP
-  const xpEarned = input.isCorrect ? 10 : 0;
-  await db.userProfile.update({
-    where: { userBucket: userId },
-    data: {
-      totalXp: { increment: xpEarned },
+    create: {
+      userBucket: userId,
+      date: today,
+      attempts: 1,
+      correct: input.isCorrect ? 1 : 0,
+      xpEarned,
+    },
+    update: {
+      attempts: { increment: 1 },
+      correct: { increment: input.isCorrect ? 1 : 0 },
+      xpEarned: { increment: xpEarned },
     },
   });
 
-  const profile = await db.userProfile.findUnique({
+  // Get or create user profile
+  let profile = await db.userProfile.findUnique({
     where: { userBucket: userId },
   });
 
   let leveledUp = false;
-  let newLevel = profile?.level ?? 1;
+  let newLevel = 1;
 
-  if (profile) {
+  if (!profile) {
+    profile = await db.userProfile.create({
+      data: {
+        userBucket: userId,
+        totalXp: xpEarned,
+        level: 1,
+        currentStreak: 1,
+        longestStreak: 1,
+        streakShields: 1,
+        lastActiveDate: today,
+      },
+    });
+    newLevel = 1;
+  } else {
     const streakResult = updateStreak(
       profile.currentStreak,
       profile.lastActiveDate ?? "",
@@ -94,15 +94,17 @@ export async function recordAttempt(input: RecordAttemptInput) {
     );
 
     const oldLevel = profile.level;
-    const computedLevel = levelForXp(profile.totalXp);
+    const newTotalXp = profile.totalXp + xpEarned;
+    const computedLevel = levelForXp(newTotalXp);
     if (computedLevel > oldLevel) {
       leveledUp = true;
-      newLevel = computedLevel;
     }
+    newLevel = computedLevel;
 
-    await db.userProfile.update({
+    profile = await db.userProfile.update({
       where: { userBucket: userId },
       data: {
+        totalXp: newTotalXp,
         currentStreak: streakResult.streak,
         longestStreak: Math.max(profile.longestStreak, streakResult.streak),
         streakShields: streakResult.shields,
@@ -307,7 +309,7 @@ export async function fetchCategoryMastery() {
   
   const [categories, totals, userStats] = await Promise.all([
     db.category.findMany({ orderBy: { displayOrder: "asc" } }),
-    db.question.groupBy({ by: ["categoryId"], _count: true }),
+    db.question.groupBy({ by: ["categoryId"], _count: { id: true } }),
     db.$queryRaw<{ categoryId: string; attempted: number; correct: number }[]>`
       SELECT q."categoryId",
              COUNT(a.id)::int AS attempted,
@@ -316,11 +318,18 @@ export async function fetchCategoryMastery() {
       JOIN questions q ON a."questionId" = q.id
       WHERE a."userBucket" = ${userId}
       GROUP BY q."categoryId"
-    `,
+    `.catch(() => [] as { categoryId: string; attempted: number; correct: number }[]),
   ]);
 
-  const totalMap = new Map(totals.map((t) => [t.categoryId, t._count]));
-  const statMap = new Map(userStats.map((s) => [s.categoryId, s]));
+  const totalMap = new Map<string, number>();
+  for (const t of totals) {
+    totalMap.set(t.categoryId, t._count.id);
+  }
+
+  const statMap = new Map<string, { attempted: number; correct: number }>();
+  for (const s of userStats) {
+    statMap.set(s.categoryId, { attempted: s.attempted, correct: s.correct });
+  }
 
   return categories.map((c) => {
     const total = totalMap.get(c.id) ?? 0;

@@ -18,9 +18,12 @@ export async function fetchCategories() {
   const cats = await db.category.findMany({ orderBy: { displayOrder: "asc" } });
   const counts = await db.question.groupBy({
     by: ["categoryId"],
-    _count: true,
+    _count: { id: true },
   });
-  const countMap = new Map(counts.map((c) => [c.categoryId, c._count]));
+  const countMap = new Map<string, number>();
+  for (const c of counts) {
+    countMap.set(c.categoryId, c._count.id);
+  }
   return cats.map((c) => toCategoryDTO(c, countMap.get(c.id) ?? 0));
 }
 
