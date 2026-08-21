@@ -133,7 +133,7 @@ export function StudioAnalyticsClient() {
     setMounted(true);
   }, []);
 
-  const { data: overview } = useQuery({
+  const { data: overview, isLoading: overviewLoading } = useQuery({
     queryKey: ["analytics-overview"],
     queryFn: getAnalyticsOverview,
   });
@@ -170,27 +170,30 @@ export function StudioAnalyticsClient() {
 
   const difficultyData = difficultyDist
     ? [
-        { name: "سهل", value: difficultyDist.easy, fill: DIFFICULTY_COLORS[0] },
-        { name: "متوسط", value: difficultyDist.medium, fill: DIFFICULTY_COLORS[1] },
-        { name: "صعب", value: difficultyDist.hard, fill: DIFFICULTY_COLORS[2] },
+        { name: "سهل", value: difficultyDist.easy || 0, fill: DIFFICULTY_COLORS[0] },
+        { name: "متوسط", value: difficultyDist.medium || 0, fill: DIFFICULTY_COLORS[1] },
+        { name: "صعب", value: difficultyDist.hard || 0, fill: DIFFICULTY_COLORS[2] },
       ]
     : [];
+
+  const nonZeroDifficultyCount = difficultyData.filter((d) => d.value > 0).length;
 
   const statusData = statusDist
     ? [
-        { name: "مسودة", value: statusDist.draft, fill: STATUS_COLORS.draft },
-        { name: "مراجعة", value: statusDist.review, fill: STATUS_COLORS.review },
-        { name: "معتمد", value: statusDist.approved, fill: STATUS_COLORS.approved },
-        { name: "منشور", value: statusDist.published, fill: STATUS_COLORS.published },
-        { name: "مؤرشف", value: statusDist.archived, fill: STATUS_COLORS.archived },
+        { name: "مسودة", value: statusDist.draft || 0, fill: STATUS_COLORS.draft },
+        { name: "مراجعة", value: statusDist.review || 0, fill: STATUS_COLORS.review },
+        { name: "معتمد", value: statusDist.approved || 0, fill: STATUS_COLORS.approved },
+        { name: "منشور", value: statusDist.published || 0, fill: STATUS_COLORS.published },
+        { name: "مؤرشف", value: statusDist.archived || 0, fill: STATUS_COLORS.archived },
       ]
     : [];
 
-  const categoryChartData = categoryBreakdown?.map((c) => ({
-    name: c.nameAr,
-    count: c.count,
-    fill: COLOR_HEX[c.color] ?? COLOR_HEX.slate,
-  })) ?? [];
+  const categoryChartData =
+    categoryBreakdown?.map((c) => ({
+      name: c.nameAr,
+      count: c.count || 0,
+      fill: COLOR_HEX[c.color] ?? COLOR_HEX.slate,
+    })) ?? [];
 
   if (!mounted) {
     return (
@@ -203,7 +206,10 @@ export function StudioAnalyticsClient() {
         </div>
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
           {Array.from({ length: 5 }).map((_, i) => (
-            <div key={i} className="h-24 rounded-xl border border-border/60 bg-card/50 animate-pulse" />
+            <div
+              key={i}
+              className="h-24 rounded-xl border border-border/60 bg-card/50 animate-pulse"
+            />
           ))}
         </div>
       </div>
@@ -243,16 +249,32 @@ export function StudioAnalyticsClient() {
         />
         <StatCard
           label="الدقة"
-          value={overview?.avgAccuracy !== null ? formatPercent(overview!.avgAccuracy! * 100) : "—"}
+          value={
+            overview?.avgAccuracy !== null && overview?.avgAccuracy !== undefined
+              ? formatPercent(overview.avgAccuracy * 100)
+              : "—"
+          }
           icon={<BarChart3 className="h-5 w-5 text-cyan-600" />}
           color="bg-cyan-50 dark:bg-cyan-950/30"
         />
         <StatCard
           label="جودة AI"
-          value={overview?.avgQuality !== undefined && overview.avgQuality !== null ? `${Math.round(overview.avgQuality * 100)}%` : "—"}
+          value={
+            overview?.avgQuality !== null && overview?.avgQuality !== undefined
+              ? `${Math.round(overview.avgQuality * 100)}%`
+              : "—"
+          }
           icon={<Sparkles className="h-5 w-5 text-rose-600" />}
           color="bg-rose-50 dark:bg-rose-950/30"
-          subtitle={overview?.avgQuality !== undefined && overview.avgQuality !== null ? (overview.avgQuality >= 0.7 ? "ممتازة" : overview.avgQuality >= 0.4 ? "جيدة" : "بحاجة تحسين") : undefined}
+          subtitle={
+            overview?.avgQuality !== null && overview?.avgQuality !== undefined
+              ? overview.avgQuality >= 0.7
+                ? "ممتازة"
+                : overview.avgQuality >= 0.4
+                ? "جيدة"
+                : "بحاجة تحسين"
+              : undefined
+          }
         />
       </div>
 
@@ -266,24 +288,30 @@ export function StudioAnalyticsClient() {
             </CardTitle>
           </CardHeader>
           <CardContent className="pt-4">
-            {categoryChartData.length === 0 ? (
-              <div className="flex items-center justify-center h-48 text-sm text-muted-foreground">
-                لا توجد بيانات
+            {categoryChartData.length === 0 || categoryChartData.every((c) => c.count === 0) ? (
+              <div className="flex items-center justify-center h-56 text-sm text-muted-foreground">
+                لا توجد بيانات أسئلة حتى الآن
               </div>
             ) : (
-              <ResponsiveContainer width="100%" height={250}>
-                <BarChart data={categoryChartData} layout="vertical" margin={{ left: 0, right: 0, top: 0, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="var(--border)" />
-                  <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={(v) => toArabicDigits(v)} />
-                  <YAxis type="category" dataKey="name" width={90} tick={{ fontSize: 11 }} />
-                  <Tooltip content={<ChartTooltip />} />
-                  <Bar dataKey="count" radius={[0, 4, 4, 0]} maxBarSize={24}>
-                    {categoryChartData.map((entry, i) => (
-                      <Cell key={i} fill={entry.fill} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
+              <div className="w-full h-64 min-h-[250px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={categoryChartData}
+                    layout="vertical"
+                    margin={{ left: 10, right: 10, top: 5, bottom: 5 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="var(--border)" />
+                    <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={(v) => toArabicDigits(v)} />
+                    <YAxis type="category" dataKey="name" width={100} tick={{ fontSize: 11 }} />
+                    <Tooltip content={<ChartTooltip />} />
+                    <Bar dataKey="count" radius={[0, 4, 4, 0]} maxBarSize={24}>
+                      {categoryChartData.map((entry, i) => (
+                        <Cell key={i} fill={entry.fill} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
             )}
           </CardContent>
         </Card>
@@ -297,29 +325,31 @@ export function StudioAnalyticsClient() {
           </CardHeader>
           <CardContent className="pt-4 flex items-center justify-center">
             {difficultyData.every((d) => d.value === 0) ? (
-              <div className="flex items-center justify-center h-48 text-sm text-muted-foreground">
-                لا توجد بيانات
+              <div className="flex items-center justify-center h-56 text-sm text-muted-foreground">
+                لا توجد بيانات صعوبة حتى الآن
               </div>
             ) : (
-              <div className="flex flex-col items-center">
-                <ResponsiveContainer width={240} height={200}>
-                  <PieChart>
-                    <Pie
-                      data={difficultyData}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={50}
-                      outerRadius={80}
-                      paddingAngle={2}
-                      dataKey="value"
-                    >
-                      {difficultyData.map((entry, i) => (
-                        <Cell key={i} fill={entry.fill} />
-                      ))}
-                    </Pie>
-                    <Tooltip content={<ChartTooltip />} />
-                  </PieChart>
-                </ResponsiveContainer>
+              <div className="flex flex-col items-center w-full">
+                <div className="w-full h-52 min-h-[200px] flex items-center justify-center">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={difficultyData}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={50}
+                        outerRadius={80}
+                        paddingAngle={nonZeroDifficultyCount > 1 ? 2 : 0}
+                        dataKey="value"
+                      >
+                        {difficultyData.map((entry, i) => (
+                          <Cell key={i} fill={entry.fill} />
+                        ))}
+                      </Pie>
+                      <Tooltip content={<ChartTooltip />} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
                 <div className="flex items-center gap-4 text-xs mt-2">
                   {difficultyData.map((d) => (
                     <div key={d.name} className="flex items-center gap-1">
@@ -348,23 +378,25 @@ export function StudioAnalyticsClient() {
           </CardHeader>
           <CardContent className="pt-4">
             {statusData.every((d) => d.value === 0) ? (
-              <div className="flex items-center justify-center h-48 text-sm text-muted-foreground">
-                لا توجد بيانات
+              <div className="flex items-center justify-center h-56 text-sm text-muted-foreground">
+                لا توجد بيانات محتوى
               </div>
             ) : (
-              <ResponsiveContainer width="100%" height={220}>
-                <BarChart data={statusData} margin={{ left: 0, right: 0, top: 0, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
-                  <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                  <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => toArabicDigits(v)} />
-                  <Tooltip content={<ChartTooltip />} />
-                  <Bar dataKey="value" radius={[4, 4, 0, 0]} maxBarSize={48}>
-                    {statusData.map((entry, i) => (
-                      <Cell key={i} fill={entry.fill} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
+              <div className="w-full h-56 min-h-[220px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={statusData} margin={{ left: 10, right: 10, top: 5, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
+                    <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                    <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => toArabicDigits(v)} />
+                    <Tooltip content={<ChartTooltip />} />
+                    <Bar dataKey="value" radius={[4, 4, 0, 0]} maxBarSize={48}>
+                      {statusData.map((entry, i) => (
+                        <Cell key={i} fill={entry.fill} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
             )}
           </CardContent>
         </Card>
@@ -377,42 +409,44 @@ export function StudioAnalyticsClient() {
             </CardTitle>
           </CardHeader>
           <CardContent className="pt-4">
-            {!dailyActivity || dailyActivity.length === 0 ? (
-              <div className="flex items-center justify-center h-48 text-sm text-muted-foreground">
-                لا توجد بيانات نشاط
+            {!dailyActivity || dailyActivity.length === 0 || dailyActivity.every((d) => d.attempts === 0) ? (
+              <div className="flex items-center justify-center h-56 text-sm text-muted-foreground">
+                لا توجد محاولات مسجلة في آخر ٣٠ يوم
               </div>
             ) : (
-              <ResponsiveContainer width="100%" height={220}>
-                <AreaChart data={dailyActivity} margin={{ left: 0, right: 0, top: 0, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                  <XAxis
-                    dataKey="date"
-                    tick={{ fontSize: 10 }}
-                    tickFormatter={(v) => v.slice(5)}
-                    interval="preserveStartEnd"
-                  />
-                  <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => toArabicDigits(v)} />
-                  <Tooltip content={<ChartTooltip />} />
-                  <Area
-                    type="monotone"
-                    dataKey="attempts"
-                    name="محاولات"
-                    stroke="#7c3aed"
-                    fill="#7c3aed"
-                    fillOpacity={0.1}
-                    strokeWidth={2}
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="correct"
-                    name="صحيحة"
-                    stroke="#059669"
-                    fill="#059669"
-                    fillOpacity={0.1}
-                    strokeWidth={2}
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
+              <div className="w-full h-56 min-h-[220px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={dailyActivity} margin={{ left: 10, right: 10, top: 5, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                    <XAxis
+                      dataKey="date"
+                      tick={{ fontSize: 10 }}
+                      tickFormatter={(v) => v.slice(5)}
+                      interval="preserveStartEnd"
+                    />
+                    <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => toArabicDigits(v)} />
+                    <Tooltip content={<ChartTooltip />} />
+                    <Area
+                      type="monotone"
+                      dataKey="attempts"
+                      name="محاولات"
+                      stroke="#7c3aed"
+                      fill="#7c3aed"
+                      fillOpacity={0.1}
+                      strokeWidth={2}
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="correct"
+                      name="صحيحة"
+                      stroke="#059669"
+                      fill="#059669"
+                      fillOpacity={0.1}
+                      strokeWidth={2}
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
             )}
           </CardContent>
         </Card>
@@ -434,7 +468,7 @@ export function StudioAnalyticsClient() {
                 <div className="flex items-center justify-between py-2 border-b border-border/50">
                   <span className="text-sm">متوسط جودة AI</span>
                   <span className="text-sm font-semibold tabular-nums">
-                    {quality.avgQualityScore !== null
+                    {quality.avgQualityScore !== null && quality.avgQualityScore !== undefined
                       ? `${Math.round(quality.avgQualityScore * 100)}%`
                       : "—"}
                   </span>
@@ -442,25 +476,27 @@ export function StudioAnalyticsClient() {
                 <div className="flex items-center justify-between py-2 border-b border-border/50">
                   <span className="text-sm">أسئلة بجودة منخفضة</span>
                   <span className="text-sm font-semibold tabular-nums text-rose-600">
-                    {toArabicDigits(quality.lowQualityCount)}
+                    {toArabicDigits(quality.lowQualityCount ?? 0)}
                   </span>
                 </div>
                 <div className="flex items-center justify-between py-2 border-b border-border/50">
                   <span className="text-sm">أسئلة بدون شرح</span>
                   <span className="text-sm font-semibold tabular-nums text-amber-600">
-                    {toArabicDigits(quality.noExplanationCount)}
+                    {toArabicDigits(quality.noExplanationCount ?? 0)}
                   </span>
                 </div>
                 <div className="flex items-center justify-between py-2 border-b border-border/50">
                   <span className="text-sm">أسئلة بدون محاولات</span>
                   <span className="text-sm font-semibold tabular-nums text-slate-600">
-                    {toArabicDigits(quality.lowAttemptCount)}
+                    {toArabicDigits(quality.lowAttemptCount ?? 0)}
                   </span>
                 </div>
                 <div className="flex items-center justify-between py-2">
                   <span className="text-sm">نسبة الأسئلة مع شرح</span>
                   <span className="text-sm font-semibold tabular-nums">
-                    {formatPercent(quality.withExplanationPct)}
+                    {quality.withExplanationPct !== undefined
+                      ? formatPercent(quality.withExplanationPct)
+                      : "—"}
                   </span>
                 </div>
               </div>
