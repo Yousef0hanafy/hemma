@@ -33,12 +33,6 @@ const RawQuestionSchema = z.object({
   citation: z.string().optional(),
 });
 
-const RawSourceSchema = z.object({
-  document_title: z.string().min(1),
-  date: z.string().optional(),
-  questions: z.array(RawQuestionSchema).min(1),
-});
-
 export interface ValidationResult {
   ok: boolean;
   data?: RawSourceJSON;
@@ -47,14 +41,140 @@ export interface ValidationResult {
 
 export function validateSource(raw: unknown): ValidationResult {
   const errors: string[] = [];
-  const parsed = RawSourceSchema.safeParse(raw);
-  if (!parsed.success) {
-    for (const issue of parsed.error.issues) {
-      errors.push(`${issue.path.join(".")}: ${issue.message}`);
-    }
-    return { ok: false, errors };
+  if (!raw || typeof raw !== "object") {
+    return { ok: false, errors: ["محتوى ملف JSON غير صالح أو فارغ."] };
   }
-  return { ok: true, data: parsed.data, errors };
+
+  // 1. Determine title and questions array
+  let docTitle = "مصدر تعليمي";
+  let date: string | undefined = undefined;
+  let rawQuestions: any[] = [];
+
+  if (Array.isArray(raw)) {
+    rawQuestions = raw;
+  } else {
+    const obj = raw as Record<string, any>;
+    docTitle =
+      obj.document_title ||
+      obj.title ||
+      obj.name ||
+      obj.source ||
+      obj.documentTitle ||
+      "مصدر تعليمي";
+    date = obj.date || obj.importedAt || undefined;
+    rawQuestions =
+      obj.questions ||
+      obj.items ||
+      obj.data ||
+      obj.questions_list ||
+      obj.questionList ||
+      [];
+  }
+
+  if (!Array.isArray(rawQuestions) || rawQuestions.length === 0) {
+    return {
+      ok: false,
+      errors: [
+        "لم يتم العثور على أي أسئلة داخل ملف JSON. تأكد من وجود مصفوفة الأسئلة (questions).",
+      ],
+    };
+  }
+
+  const normalizedQuestions: RawQuestionJSON[] = [];
+  const arabicKeys: ArabicLetter[] = ["أ", "ب", "ج", "د"];
+
+  for (let i = 0; i < rawQuestions.length; i++) {
+    const q = rawQuestions[i];
+    if (!q || typeof q !== "object") continue;
+
+    const id = typeof q.id === "number" ? q.id : i + 1;
+    const stem =
+      q.question || q.stem || q.prompt || q.text || q.body || q.title || "";
+    const type =
+      q.type ||
+      q.category ||
+      q.categoryNameAr ||
+      q.section ||
+      q.categorySlug ||
+      "تناظر لفظي";
+
+    // Normalize options (support Object, Array of strings, Array of objects)
+    let optionsRecord: Record<string, string> = {};
+    if (q.options && typeof q.options === "object") {
+      if (Array.isArray(q.options)) {
+        q.options.forEach((opt: any, optIdx: number) => {
+          let key = arabicKeys[optIdx] || String(optIdx + 1);
+          let text = "";
+
+          if (typeof opt === "object" && opt !== null) {
+            key = opt.key || opt.letter || key;
+            text = String(opt.text ?? opt.value ?? opt.label ?? "");
+          } else {
+            text = String(opt);
+          }
+
+          // Strip prefix like "أ) " or "أ - " if present
+          text = text.replace(/^[أ-دA-D1-4][\)\-\:\.\s]\s*/, "").trim();
+          optionsRecord[key] = text;
+        });
+      } else {
+        optionsRecord = q.options as Record<string, string>;
+      }
+    }
+
+    // Normalize answer
+    const rawAnswer = String(
+      q.answer ??
+        q.correctKey ??
+        q.correct ??
+        q.correct_answer ??
+        q.correctOption ??
+        q.solution ??
+        "أ"
+    ).trim();
+
+    // Map answer key to canonical Arabic letter
+    const canonicalKey =
+      canonicalLetter(rawAnswer) ||
+      (optionsRecord[rawAnswer] ? (rawAnswer as ArabicLetter) : "أ");
+
+    const citation = q.citation ? String(q.citation) : undefined;
+
+    if (!String(stem).trim()) {
+      errors.push(`السؤال رقم #${id}: نص السؤال فارغ.`);
+      continue;
+    }
+    if (Object.keys(optionsRecord).length < 2) {
+      errors.push(`السؤال رقم #${id}: يجب أن يحتوي على خيارين على الأقل.`);
+      continue;
+    }
+
+    normalizedQuestions.push({
+      id,
+      type: String(type),
+      question: String(stem).trim(),
+      options: optionsRecord,
+      answer: canonicalKey,
+      citation,
+    });
+  }
+
+  if (normalizedQuestions.length === 0) {
+    return {
+      ok: false,
+      errors: errors.length > 0 ? errors : ["لا توجد أسئلة صالحة في الملف."],
+    };
+  }
+
+  return {
+    ok: true,
+    data: {
+      document_title: String(docTitle).trim(),
+      date,
+      questions: normalizedQuestions,
+    },
+    errors,
+  };
 }
 
 // ---------------------------------------------------------------------------
