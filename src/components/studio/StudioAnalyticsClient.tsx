@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   BarChart,
@@ -127,6 +128,11 @@ function ChartTooltip({ active, payload, label }: any) {
 // ---------------------------------------------------------------------------
 
 export function StudioAnalyticsClient() {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   const { data: overview } = useQuery({
     queryKey: ["analytics-overview"],
     queryFn: getAnalyticsOverview,
@@ -185,6 +191,24 @@ export function StudioAnalyticsClient() {
     count: c.count,
     fill: COLOR_HEX[c.color] ?? COLOR_HEX.slate,
   })) ?? [];
+
+  if (!mounted) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold">التحليلات</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            إحصائيات شاملة عن المحتوى والأداء في المنصة
+          </p>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} className="h-24 rounded-xl border border-border/60 bg-card/50 animate-pulse" />
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
