@@ -134,7 +134,7 @@ async function buildCategoryData(
     const [totals, userStats] = await Promise.all([
       db.question.groupBy({
         by: ["categoryId"],
-        _count: true,
+        _count: { id: true },
       }).catch(() => []),
       db.$queryRaw<{ categoryId: string; attempted: number; correct: number }[]>`
         SELECT q."categoryId",
@@ -147,12 +147,18 @@ async function buildCategoryData(
       `.catch(() => []),
     ]);
 
-    const totalMap = new Map(totals.map((t) => [t.categoryId, t._count]));
-    const statMap = new Map(userStats.map((s) => [s.categoryId, s]));
+    const totalMap = new Map<string, number>();
+    for (const t of totals) {
+      totalMap.set(t.categoryId, t._count.id);
+    }
+    const statMap = new Map<string, { categoryId: string; attempted: number; correct: number }>();
+    for (const s of userStats) {
+      statMap.set(s.categoryId, s);
+    }
 
     return categories.map((c) => {
       const total = totalMap.get(c.id) ?? 0;
-      const s = statMap.get(c.id) ?? { attempted: 0, correct: 0 };
+      const s = statMap.get(c.id) ?? { categoryId: c.id, attempted: 0, correct: 0 };
       return {
         slug: c.slug,
         nameAr: c.nameAr,
