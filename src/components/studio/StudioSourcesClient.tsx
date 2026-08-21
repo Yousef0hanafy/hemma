@@ -74,6 +74,7 @@ import {
   Sparkles,
   BrainCircuit,
   Clock,
+  Upload,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { relativeTimeAr } from "@/lib/content/ui-helpers";
@@ -1042,6 +1043,13 @@ export function StudioSourcesClient() {
             {data?.length ?? 0} مصادر — {totalQuestions} سؤال
           </p>
         </div>
+        <Button
+          onClick={() => router.push("/studio/import")}
+          className="gap-2 shrink-0"
+        >
+          <Upload className="h-4 w-4" />
+          استيراد مستند / ملف جديد
+        </Button>
       </div>
 
       {/* Stats cards */}
