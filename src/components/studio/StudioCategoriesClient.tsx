@@ -43,6 +43,11 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
+  Popover,
+  PopoverTrigger,
+  PopoverContent,
+} from "@/components/ui/popover";
+import {
   getCategories,
   updateCategory,
   reorderCategories,
@@ -91,8 +96,6 @@ function SortableCategoryCard({
 }) {
   const [editing, setEditing] = useState(false);
   const [newName, setNewName] = useState(category.nameAr);
-  const [showColorPicker, setShowColorPicker] = useState(false);
-  const [showIconPicker, setShowIconPicker] = useState(false);
 
   const {
     attributes,
@@ -197,80 +200,62 @@ function SortableCategoryCard({
       </div>
 
       {/* Color picker */}
-      <div className="relative">
-        <button
-          onClick={() => setShowColorPicker(!showColorPicker)}
-          className="flex h-7 w-7 items-center justify-center rounded-lg hover:bg-muted"
-          aria-label="تغيير اللون"
-        >
-          <Palette className="h-3.5 w-3.5 text-muted-foreground" />
-        </button>
-        <AnimatePresence>
-          {showColorPicker && (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="absolute left-0 bottom-full mb-2 z-20 grid grid-cols-4 gap-1 rounded-xl border border-border bg-card p-2 shadow-lg"
-            >
-              {COLORS.map((c) => (
-                <button
-                  key={c.value}
-                  onClick={() => {
-                    onColorChange(category.id, c.value);
-                    setShowColorPicker(false);
-                  }}
-                  className={cn(
-                    "h-7 w-7 rounded-lg transition-transform hover:scale-110",
-                    c.bg,
-                    category.colorTheme === c.value && "ring-2 ring-primary"
-                  )}
-                  title={c.label}
-                >
-                  <div className={cn("h-3 w-3 rounded-full mx-auto", c.dot)} />
-                </button>
-              ))}
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
+      <Popover>
+        <PopoverTrigger asChild>
+          <button
+            className="flex h-7 w-7 items-center justify-center rounded-lg hover:bg-muted transition-colors"
+            aria-label="تغيير اللون"
+          >
+            <Palette className="h-3.5 w-3.5 text-muted-foreground" />
+          </button>
+        </PopoverTrigger>
+        <PopoverContent className="w-auto p-2.5 z-50 shadow-xl" align="center" side="bottom" sideOffset={6}>
+          <div className="grid grid-cols-4 gap-1.5 w-36">
+            {COLORS.map((c) => (
+              <button
+                key={c.value}
+                onClick={() => onColorChange(category.id, c.value)}
+                className={cn(
+                  "h-7 w-7 rounded-lg transition-transform hover:scale-110 flex items-center justify-center",
+                  c.bg,
+                  category.colorTheme === c.value && "ring-2 ring-primary"
+                )}
+                title={c.label}
+              >
+                <div className={cn("h-3 w-3 rounded-full", c.dot)} />
+              </button>
+            ))}
+          </div>
+        </PopoverContent>
+      </Popover>
 
       {/* Icon picker */}
-      <div className="relative">
-        <button
-          onClick={() => setShowIconPicker(!showIconPicker)}
-          className="flex h-7 w-7 items-center justify-center rounded-lg hover:bg-muted"
-          aria-label="تغيير الأيقونة"
-        >
-          <Hash className="h-3.5 w-3.5 text-muted-foreground" />
-        </button>
-        <AnimatePresence>
-          {showIconPicker && (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="absolute left-0 bottom-full mb-2 z-20 grid grid-cols-4 gap-1 rounded-xl border border-border bg-card p-2 shadow-lg"
-            >
-              {ICONS.map((icon) => (
-                <button
-                  key={icon}
-                  onClick={() => {
-                    onIconChange(category.id, icon);
-                    setShowIconPicker(false);
-                  }}
-                  className={cn(
-                    "h-8 w-8 flex items-center justify-center rounded-lg text-base hover:bg-muted transition-transform hover:scale-110",
-                    category.icon === icon && "ring-2 ring-primary bg-muted"
-                  )}
-                >
-                  {icon}
-                </button>
-              ))}
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
+      <Popover>
+        <PopoverTrigger asChild>
+          <button
+            className="flex h-7 w-7 items-center justify-center rounded-lg hover:bg-muted transition-colors"
+            aria-label="تغيير الأيقونة"
+          >
+            <Hash className="h-3.5 w-3.5 text-muted-foreground" />
+          </button>
+        </PopoverTrigger>
+        <PopoverContent className="w-auto p-2.5 z-50 shadow-xl" align="center" side="bottom" sideOffset={6}>
+          <div className="grid grid-cols-4 gap-1.5 w-44">
+            {ICONS.map((icon) => (
+              <button
+                key={icon}
+                onClick={() => onIconChange(category.id, icon)}
+                className={cn(
+                  "h-8 w-8 flex items-center justify-center rounded-lg text-base hover:bg-muted transition-transform hover:scale-110",
+                  category.icon === icon && "ring-2 ring-primary bg-muted"
+                )}
+              >
+                {icon}
+              </button>
+            ))}
+          </div>
+        </PopoverContent>
+      </Popover>
 
       {/* Delete */}
       {category.questionCount === 0 && (
