@@ -685,28 +685,33 @@ function SourceRow({
         )}
         onClick={onToggle}
       >
-        <TableCell className="py-3" onClick={(e) => e.stopPropagation()}>
-          <div className="flex items-center gap-1">
-            <Checkbox
-              checked={selected ?? false}
-              onCheckedChange={(v) => onSelect?.(v === true)}
-              className="shrink-0 mr-0.5"
-            />
-            <div className="text-muted-foreground transition-transform duration-200">
+        {/* 1. Checkbox */}
+        <TableCell className="w-[4%] py-3" onClick={(e) => e.stopPropagation()}>
+          <Checkbox
+            checked={selected ?? false}
+            onCheckedChange={(v) => onSelect?.(v === true)}
+            className="shrink-0"
+          />
+        </TableCell>
+
+        {/* 2. Source Brand & Title */}
+        <TableCell className="w-[36%] py-3">
+          <div className="flex items-center gap-2">
+            <div className="text-muted-foreground transition-transform duration-200 shrink-0">
               {expanded ? (
                 <ChevronUp className="h-4 w-4" />
               ) : (
                 <ChevronDown className="h-4 w-4" />
               )}
             </div>
-            <div className="w-9 h-9 rounded-lg bg-amber-50 dark:bg-amber-950 flex items-center justify-center shrink-0">
+            <div className="w-8 h-8 rounded-lg bg-amber-50 dark:bg-amber-950 flex items-center justify-center shrink-0">
               <FolderOpen className="h-4 w-4 text-amber-500" />
             </div>
-            <div onClick={(e) => e.stopPropagation()}>
+            <div className="min-w-0 flex-1" onClick={(e) => e.stopPropagation()}>
               <InlineRename value={source.title} onSave={handleRename} />
             </div>
             {processingFlags && (
-              <div className="flex items-center gap-0.5 mr-1">
+              <div className="flex items-center gap-0.5 mr-1 shrink-0">
                 <span
                   className={cn(
                     "inline-block w-2 h-2 rounded-full transition-colors",
@@ -750,13 +755,17 @@ function SourceRow({
             )}
           </div>
         </TableCell>
-        <TableCell className="py-3">
+
+        {/* 3. Imported Date */}
+        <TableCell className="w-[15%] py-3">
           <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
             <Calendar className="h-3.5 w-3.5 shrink-0" />
             <span>{formatDate(source.importedAt)}</span>
           </div>
         </TableCell>
-        <TableCell className="py-3">
+
+        {/* 4. Question Count */}
+        <TableCell className="w-[12%] py-3">
           <div className="flex items-center gap-1.5 text-sm">
             <Hash className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
             <span className="font-semibold tabular-nums">
@@ -770,13 +779,15 @@ function SourceRow({
             </div>
           )}
         </TableCell>
-        <TableCell className="py-3">
+
+        {/* 5. Status Breakdown Mini Bar */}
+        <TableCell className="w-[23%] py-3">
           <div className="flex items-center gap-2">
-            <div className="flex-1 flex gap-0.5 h-5 items-end">
+            <div className="flex-1 flex gap-1 h-5 items-end">
               {source.statusBreakdown.map((s) => {
                 const pct =
                   totalStatus > 0
-                    ? Math.max((s.count / maxStatus) * 100, 8)
+                    ? Math.max((s.count / maxStatus) * 100, 10)
                     : 0;
                 const barColor = STATUS_COLORS[s.status]
                   ?.match(/text-(\w+)-/)
@@ -785,7 +796,7 @@ function SourceRow({
                   <div
                     key={s.status}
                     className="relative group/bar flex-1"
-                    style={{ height: `${Math.max(pct, 8)}%` }}
+                    style={{ height: `${Math.max(pct, 10)}%` }}
                   >
                     <div
                       className={cn(
@@ -800,7 +811,7 @@ function SourceRow({
                       )}
                       style={{ height: `${pct}%` }}
                     />
-                    <div className="absolute -top-5 left-1/2 -translate-x-1/2 opacity-0 group-hover/bar:opacity-100 transition-opacity bg-popover text-popover-foreground text-[10px] px-1.5 py-0.5 rounded shadow whitespace-nowrap z-10">
+                    <div className="absolute -top-6 left-1/2 -translate-x-1/2 opacity-0 group-hover/bar:opacity-100 transition-opacity bg-popover text-popover-foreground text-[10px] px-2 py-0.5 rounded shadow-sm whitespace-nowrap z-10 font-medium">
                       {STATUS_LABELS[s.status]}: {s.count}
                     </div>
                   </div>
@@ -809,7 +820,9 @@ function SourceRow({
             </div>
           </div>
         </TableCell>
-        <TableCell className="py-3 text-start">
+
+        {/* 6. Actions */}
+        <TableCell className="w-[10%] py-3 text-start">
           <div
             className="flex items-center justify-end gap-1"
             onClick={(e) => e.stopPropagation()}
@@ -818,7 +831,7 @@ function SourceRow({
               onClick={handleRunAllAI}
               disabled={aiProcessing}
               className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium text-violet-600 hover:text-violet-700 hover:bg-violet-50 dark:text-violet-400 dark:hover:bg-violet-950/30 transition-colors shrink-0"
-              title="تشغيل جميع عمليات AI (فحص الجودة + تقدير الصعوبة + توليد الشروحات)"
+              title="تشغيل جميع عمليات AI"
             >
               {aiProcessing ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -1220,8 +1233,8 @@ export function StudioSourcesClient() {
               <TableHead className="w-[36%]">المصدر</TableHead>
               <TableHead className="w-[15%]">تاريخ الاستيراد</TableHead>
               <TableHead className="w-[12%]">الأسئلة</TableHead>
-              <TableHead className="w-[25%]">توزيع الحالات</TableHead>
-              <TableHead className="w-[8%] text-start">إجراءات</TableHead>
+              <TableHead className="w-[23%]">توزيع الحالات</TableHead>
+              <TableHead className="w-[10%] text-end">إجراءات</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
