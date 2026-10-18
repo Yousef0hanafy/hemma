@@ -8,8 +8,9 @@
 import { NextRequest } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { STUDIO_ROLES } from "@/lib/studio-auth";
 import { getGeminiClient, getAIModelName } from "@/server/ai/evaluator";
-import { buildSystemPrompt } from "@/server/actions/studio-chat";
+import { buildSystemPrompt } from "@/server/ai/studio-chat-prompt";
 import type { ChatMessage } from "@/server/actions/studio-chat";
 import { aiRateLimiter, getClientIdentifier, rateLimitResponse } from "@/lib/rate-limiter";
 
@@ -148,6 +149,12 @@ export async function POST(req: NextRequest) {
   if (!session?.user?.id) {
     return new Response(JSON.stringify({ error: "غير مصرح به" }), {
       status: 401,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+  if (!(STUDIO_ROLES as readonly string[]).includes(session.user.role)) {
+    return new Response(JSON.stringify({ error: "ليس لديك صلاحية الوصول إلى الاستوديو" }), {
+      status: 403,
       headers: { "Content-Type": "application/json" },
     });
   }

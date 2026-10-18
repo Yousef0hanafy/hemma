@@ -1,7 +1,7 @@
 "use server";
 
 import { db } from "@/lib/db";
-import { requireStudioAccess } from "@/lib/studio-auth";
+import { requireStudioAccess, requireEditorAccess } from "@/lib/studio-auth";
 
 // ---------------------------------------------------------------------------
 // DTOs
@@ -61,7 +61,7 @@ export async function updateCategory(
     colorTheme?: string | null;
   }
 ): Promise<CategoryEntity> {
-  await requireStudioAccess();
+  await requireEditorAccess();
 
   const updated = await db.category.update({
     where: { id },
@@ -94,7 +94,7 @@ export async function updateCategory(
 export async function reorderCategories(
   items: { id: string; displayOrder: number }[]
 ): Promise<{ success: boolean }> {
-  await requireStudioAccess();
+  await requireEditorAccess();
 
   await db.$transaction(
     items.map((item) =>
@@ -118,7 +118,7 @@ export async function createCategory(data: {
   icon?: string;
   colorTheme?: string;
 }): Promise<CategoryEntity> {
-  await requireStudioAccess();
+  await requireEditorAccess();
 
   const slug =
     (data.slug ??
@@ -160,7 +160,7 @@ export async function createCategory(data: {
 // ---------------------------------------------------------------------------
 
 export async function deleteCategory(id: string): Promise<{ success: boolean }> {
-  await requireStudioAccess();
+  await requireEditorAccess();
 
   // Find or create "uncategorized" fallback
   let uncategorized = await db.category.findUnique({

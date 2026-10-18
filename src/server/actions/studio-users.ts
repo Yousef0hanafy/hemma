@@ -41,7 +41,7 @@ export interface UsersOverview {
 // ---------------------------------------------------------------------------
 
 export async function getUsers(): Promise<UserListItem[]> {
-  await requireStudioAccess();
+  await requireAdminAccess("ليس لديك صلاحية لإدارة المستخدمين");
 
   const users = await db.user.findMany({
     orderBy: { name: "asc" },
@@ -218,11 +218,14 @@ export async function updateUserRole(
   userId: string,
   newRole: string
 ): Promise<{ ok: boolean }> {
-  await requireAdminAccess("ليس لديك صلاحية لإدارة المستخدمين");
+  const actorId = await requireAdminAccess("ليس لديك صلاحية لإدارة المستخدمين");
 
   const validRoles = ["student", "admin", "editor", "reviewer"];
   if (!validRoles.includes(newRole)) {
     throw new Error("الدور غير صالح");
+  }
+  if (userId === actorId && newRole !== "admin") {
+    throw new Error("لا يمكنك إزالة صلاحية المدير عن حسابك");
   }
 
   await db.user.update({
@@ -240,7 +243,10 @@ export async function updateUserRole(
 export async function deleteUser(
   userId: string
 ): Promise<{ deleted: boolean }> {
-  await requireAdminAccess("ليس لديك صلاحية لإدارة المستخدمين");
+  const actorId = await requireAdminAccess("ليس لديك صلاحية لإدارة المستخدمين");
+  if (userId === actorId) {
+    throw new Error("لا يمكنك حذف حسابك من هنا");
+  }
 
   // Delete all user-related data
   await db.attempt.deleteMany({ where: { userBucket: userId } });

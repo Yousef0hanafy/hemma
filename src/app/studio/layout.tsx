@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { requireStudioAccess } from "@/lib/auth";
+import { requireStudioAccess } from "@/lib/studio-auth";
 import { StudioShell } from "@/components/studio/StudioShell";
 
 export default async function StudioLayout({

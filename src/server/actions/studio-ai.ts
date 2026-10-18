@@ -1,7 +1,7 @@
 "use server";
 
 import { db } from "@/lib/db";
-import { requireStudioAccess } from "@/lib/studio-auth";
+import { requireStudioAccess, requireEditorAccess } from "@/lib/studio-auth";
 import {
   processSource,
   processAllUnprocessed,
@@ -141,7 +141,7 @@ export async function getAIHistory(): Promise<AIHistoryItem[]> {
 export async function triggerSourceProcessing(
   sourceId: string
 ): Promise<AIProcessResult> {
-  await requireStudioAccess();
+  await requireEditorAccess();
 
   const result = await processSource(sourceId);
 
@@ -168,7 +168,7 @@ export async function triggerSourceProcessing(
 export async function triggerSingleProcessing(
   questionId: string
 ): Promise<{ score: number | null; issues: string[] }> {
-  await requireStudioAccess();
+  await requireEditorAccess();
 
   const result = await processQuestion(questionId);
 
@@ -185,7 +185,7 @@ export async function triggerSingleProcessing(
 // ---------------------------------------------------------------------------
 
 export async function triggerBatchProcessing(): Promise<AIProcessResult> {
-  await requireStudioAccess();
+  await requireEditorAccess();
 
   const result = await processAllUnprocessed();
 
@@ -224,7 +224,7 @@ export interface SourceAIStatus {
 export async function batchEstimateDifficultyForSource(
   sourceId: string
 ): Promise<{ total: number; updated: number; failed: number }> {
-  const userId = await requireStudioAccess();
+  const userId = await requireEditorAccess();
 
   const questions = await db.question.findMany({
     where: { sourceId },
@@ -328,7 +328,7 @@ export async function batchEstimateDifficultyForSource(
 export async function batchGenerateExplanationsForSource(
   sourceId: string
 ): Promise<{ total: number; generated: number; skipped: number; failed: number }> {
-  const userId = await requireStudioAccess();
+  const userId = await requireEditorAccess();
 
   const questions = await db.question.findMany({
     where: { sourceId },
@@ -492,7 +492,7 @@ export interface FullProcessingResult {
 export async function triggerFullSourceProcessing(
   sourceId: string
 ): Promise<FullProcessingResult> {
-  await requireStudioAccess();
+  await requireEditorAccess();
 
   // Run all three in sequence
   const quality = await processSource(sourceId).catch(() => null);
@@ -521,7 +521,7 @@ export async function triggerFullSourceProcessing(
 export async function triggerFullSourceProcessingBatch(
   sourceIds: string[]
 ): Promise<{ processed: number; failed: number; results: FullProcessingResult[] }> {
-  await requireStudioAccess();
+  await requireEditorAccess();
 
   let processed = 0;
   let failed = 0;

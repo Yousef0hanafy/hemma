@@ -134,7 +134,7 @@ const MAX_OPTION_LENGTH = 500;
 export async function getQuestionDetail(
   id: string
 ): Promise<QuestionDetail | null> {
-  await requirePermission("question", "read");
+  await requirePermission("library", "read");
 
   if (!isValidId(id)) {
     throw new Error("Invalid question ID");
@@ -454,7 +454,7 @@ export async function updateQuestionOptions(
 export async function getQuestionVersions(
   questionId: string
 ): Promise<QuestionVersionInfo[]> {
-  await requirePermission("question", "read");
+  await requirePermission("library", "read");
 
   if (!isValidId(questionId)) {
     throw new Error("Invalid question ID");
@@ -573,7 +573,7 @@ export async function bulkApplyField(
 export async function previewBulkApplyCount(
   filter: BulkApplyFilter
 ): Promise<{ count: number }> {
-  await requirePermission("question", "read");
+  await requirePermission("library", "read");
 
   const where: Record<string, unknown> = {};
 
@@ -731,7 +731,7 @@ export async function estimateDifficultyForQuestion(
 export async function getAdjacentQuestionIds(
   questionId: string
 ): Promise<{ prevId: string | null; nextId: string | null }> {
-  await requirePermission("question", "read");
+  await requirePermission("library", "read");
 
   if (!isValidId(questionId)) {
     throw new Error("Invalid question ID");

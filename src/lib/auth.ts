@@ -190,11 +190,27 @@ export const authOptions: AuthOptions = {
   },
   secret: process.env.NEXTAUTH_SECRET,
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user, account, profile }) {
       // Initial sign-in
       if (user) {
         token.id = user.id;
         token.role = (user as any).role || "student";
+
+        // Bootstrap the owner account: ADMIN_EMAIL is promoted only when the
+        // email is proven by Google (credentials signups are unverified).
+        const adminEmail = process.env.ADMIN_EMAIL?.trim().toLowerCase();
+        const googleVerified =
+          account?.provider === "google" &&
+          (profile as { email_verified?: boolean } | undefined)?.email_verified === true;
+        if (
+          adminEmail &&
+          googleVerified &&
+          user.email?.toLowerCase() === adminEmail &&
+          token.role !== "admin"
+        ) {
+          await db.user.update({ where: { id: user.id }, data: { role: "admin" } });
+          token.role = "admin";
+        }
         token.jti = crypto.randomUUID();
         token.accessToken = crypto.randomUUID();
         token.refreshToken = crypto.randomUUID();
@@ -252,39 +268,6 @@ export const authOptions: AuthOptions = {
 };
 
 // ── Authorization Helpers ───────────────────────────────────────
-
-export async function requireRole(role: UserRole): Promise<string> {
-  const { getServerSession } = await import("next-auth");
-  const session = await getServerSession(authOptions);
-  
-  if (!session?.user?.id) {
-    throw new Error("UNAUTHORIZED");
-  }
-
-  const userRole = (session.user as any).role as UserRole;
-  if (!hasPermission(userRole, "*", "read") && userRole !== role) {
-    throw new Error("FORBIDDEN");
-  }
-
-  return session.user.id;
-}
-
-export async function requireStudioAccess() {
-  const { getServerSession } = await import("next-auth");
-  const session = await getServerSession(authOptions);
-  
-  if (!session?.user?.id) {
-    throw new Error("UNAUTHORIZED");
-  }
-
-  const userRole = (session.user as any).role as UserRole;
-  // Only editors, reviewers, and admins can access studio
-  if (!["editor", "reviewer", "admin"].includes(userRole)) {
-    throw new Error("FORBIDDEN");
-  }
-
-  return session.user.id;
-}
 
 // ── Enhanced Authorization Helpers ──────────────────────────────
 

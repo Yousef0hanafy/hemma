@@ -1,7 +1,7 @@
 "use server";
 
 import { db } from "@/lib/db";
-import { requireStudioAccess } from "@/lib/studio-auth";
+import { requireStudioAccess, requireEditorAccess } from "@/lib/studio-auth";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -143,7 +143,7 @@ function getDateFilter(dateRange: string): Date | null {
  * Sweeps any background jobs stuck in 'processing' or 'pending' longer than 5 minutes.
  */
 export async function cleanupStuckAuditLogs(): Promise<number> {
-  await requireStudioAccess();
+  await requireEditorAccess();
   const fiveMinsAgo = new Date(Date.now() - 5 * 60 * 1000);
   const result = await db.aIProcessingLog.updateMany({
     where: {

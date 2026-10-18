@@ -1,51 +1,54 @@
-import { db } from "@/lib/db";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 
 // Roles that are allowed inside the Studio
-const STUDIO_ROLES = ["editor", "reviewer", "admin"] as const;
-type StudioRole = (typeof STUDIO_ROLES)[number];
+export const STUDIO_ROLES = ["editor", "reviewer", "admin"] as const;
+/** Roles that may change content (questions, sources, categories, imports, AI jobs) */
+export const EDITOR_ROLES = ["editor", "admin"] as const;
 
 /**
- * Require the user to be logged in AND hold a studio role
- * (editor | reviewer | admin).  Throws an Arabic error on failure.
- *
- * Use this guard in ALL studio server actions.
+ * Resolve the current session and require one of `allowed` roles.
+ * The role comes from the JWT, which the jwt callback refreshes from the DB
+ * on every request — so demotions take effect immediately.
  */
-export async function requireStudioAccess(): Promise<string> {
+async function requireRoleIn(
+  allowed: readonly string[],
+  errorMessage: string
+): Promise<string> {
   const session = await getServerSession(authOptions);
 
   if (!session?.user?.id) {
     throw new Error("يجب تسجيل الدخول أولاً");
   }
 
-  let role = (session.user as any).role as string;
-  const userEmail = session.user.email?.toLowerCase();
-
-  // If user does not have studio role, check if they are the first user / project owner
-  if (!(STUDIO_ROLES as readonly string[]).includes(role)) {
-    try {
-      const adminEmail = process.env.ADMIN_EMAIL?.toLowerCase();
-      const adminCount = await db.user.count({ where: { role: "admin" } });
-
-      if ((adminEmail && userEmail === adminEmail) || adminCount === 0) {
-        await db.user.update({
-          where: { id: session.user.id },
-          data: { role: "admin" },
-        });
-        role = "admin";
-        (session.user as any).role = "admin";
-      }
-    } catch {
-      // Ignore fallback check errors
-    }
-  }
-
-  if (!(STUDIO_ROLES as readonly string[]).includes(role)) {
-    throw new Error("ليس لديك صلاحية الوصول إلى الاستوديو (مطلوب حساب مدير أو محرر)");
+  if (!allowed.includes(session.user.role)) {
+    throw new Error(errorMessage);
   }
 
   return session.user.id;
+}
+
+/**
+ * Require the user to be logged in AND hold a studio role
+ * (editor | reviewer | admin).  Throws an Arabic error on failure.
+ *
+ * Use this guard (or a stricter one below) in ALL studio server actions.
+ */
+export async function requireStudioAccess(): Promise<string> {
+  return requireRoleIn(
+    STUDIO_ROLES,
+    "ليس لديك صلاحية الوصول إلى الاستوديو (مطلوب حساب مدير أو محرر)"
+  );
+}
+
+/**
+ * Require a role that may modify content (editor | admin).
+ */
+export async function requireEditorAccess(): Promise<string> {
+  return requireRoleIn(
+    EDITOR_ROLES,
+    "ليس لديك صلاحية تعديل المحتوى (مطلوب حساب محرر أو مدير)"
+  );
 }
 
 /**
@@ -68,38 +71,10 @@ export async function requireAuth(): Promise<string> {
 export async function requireAdminAccess(
   errorMessage?: string
 ): Promise<string> {
-  const session = await getServerSession(authOptions);
-
-  if (!session?.user?.id) {
-    throw new Error("يجب تسجيل الدخول أولاً");
-  }
-
-  let role = (session.user as any).role as string;
-  const userEmail = session.user.email?.toLowerCase();
-
-  if (role !== "admin") {
-    try {
-      const adminEmail = process.env.ADMIN_EMAIL?.toLowerCase();
-      const adminCount = await db.user.count({ where: { role: "admin" } });
-
-      if ((adminEmail && userEmail === adminEmail) || adminCount === 0) {
-        await db.user.update({
-          where: { id: session.user.id },
-          data: { role: "admin" },
-        });
-        role = "admin";
-        (session.user as any).role = "admin";
-      }
-    } catch {
-      // Ignore fallback check errors
-    }
-  }
-
-  if (role !== "admin") {
-    throw new Error(errorMessage ?? "ليس لديك صلاحية الوصول إلى هذه الميزة (مطلوب حساب مدير)");
-  }
-
-  return session.user.id;
+  return requireRoleIn(
+    ["admin"],
+    errorMessage ?? "ليس لديك صلاحية الوصول إلى هذه الميزة (مطلوب حساب مدير)"
+  );
 }
 
 // ---------------------------------------------------------------------------

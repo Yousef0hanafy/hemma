@@ -15,6 +15,7 @@
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:reset": "prisma migrate reset",
+    "admin:grant": "node scripts/grant-admin.mjs",
     "postinstall": "prisma generate"
   },
   "dependencies": {

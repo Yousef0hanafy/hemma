@@ -16,6 +16,8 @@ export interface ImportProcessingStatus {
 export async function getImportProcessingStatus(
   sourceId: string
 ): Promise<ImportProcessingStatus> {
+  await requireStudioAccess();
+
   // Check which settings are enabled
   const settings = await db.studioSetting.findMany({
     where: {

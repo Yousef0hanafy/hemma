@@ -1,20 +1,7 @@
 "use server";
 
 import { db } from "@/lib/db";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
-
-// ---------------------------------------------------------------------------
-// Auth
-// ---------------------------------------------------------------------------
-
-async function requireReviewer(): Promise<string> {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) {
-    throw new Error("يجب تسجيل الدخول أولاً");
-  }
-  return session.user.id;
-}
+import { requireStudioAccess as requireReviewer } from "@/lib/studio-auth";
 
 // ---------------------------------------------------------------------------
 // DTOs
