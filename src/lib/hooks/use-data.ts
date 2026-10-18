@@ -116,6 +116,8 @@ export function useServerData<T>(
   }, [scopedKey]);
 
   useEffect(() => {
+    // Fetch-on-mount: load() synchronously resets loading/error before awaiting.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     load();
     return subscribe(scopedKey, load);
   }, [load, scopedKey, ...deps]);

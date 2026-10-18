@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useIsMobile } from "@/hooks/use-mobile";
 import {
   springEntrance,
   springHover,
@@ -291,7 +292,10 @@ export function StudioChatClient() {
   >([]);
   const [loadingSessions, setLoadingSessions] = useState(true);
   const [loadingMessages, setLoadingMessages] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  // null = not toggled yet → default to open on desktop, closed on mobile
+  const [sidebarToggled, setSidebarOpen] = useState<boolean | null>(null);
+  const isMobile = useIsMobile();
+  const sidebarOpen = sidebarToggled ?? !isMobile;
   const [initialLoadDone, setInitialLoadDone] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -300,10 +304,24 @@ export function StudioChatClient() {
   // Track whether we've auto-titled the session
   const hasAutoTitled = useRef(false);
 
-  // Default sidebar open on large screens
-  useEffect(() => {
-    if (typeof window !== "undefined" && window.innerWidth >= 768) {
-      setSidebarOpen(true);
+  // ── Load a session ────────────────────────────────────────────
+
+  const loadSession = useCallback(async (id: string) => {
+    setLoadingMessages(true);
+    setStreamingMessage(false);
+    setSending(false);
+
+    try {
+      const session = await fetchChatSession(id);
+      if (session) {
+        setSessionId(session.id);
+        setMessages(session.messages);
+        hasAutoTitled.current = session.messages.length > 0;
+      }
+    } catch {
+      toast.error("فشل تحميل المحادثة");
+    } finally {
+      setLoadingMessages(false);
     }
   }, []);
 
@@ -326,7 +344,7 @@ export function StudioChatClient() {
         setInitialLoadDone(true);
       }
     })();
-  }, []);
+  }, [loadSession]);
 
   // ── Auto-scroll ───────────────────────────────────────────────
 
@@ -341,27 +359,6 @@ export function StudioChatClient() {
       inputRef.current?.focus();
     }
   }, [loadingMessages]);
-
-  // ── Load a session ────────────────────────────────────────────
-
-  const loadSession = useCallback(async (id: string) => {
-    setLoadingMessages(true);
-    setStreamingMessage(false);
-    setSending(false);
-
-    try {
-      const session = await fetchChatSession(id);
-      if (session) {
-        setSessionId(session.id);
-        setMessages(session.messages);
-        hasAutoTitled.current = session.messages.length > 0;
-      }
-    } catch {
-      toast.error("فشل تحميل المحادثة");
-    } finally {
-      setLoadingMessages(false);
-    }
-  }, []);
 
   // ── Refresh session list ──────────────────────────────────────
 
@@ -717,7 +714,7 @@ export function StudioChatClient() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setSidebarOpen((prev) => !prev)}
+              onClick={() => setSidebarOpen(!sidebarOpen)}
               className="h-8 gap-1.5 text-xs shrink-0"
               title={sidebarOpen ? "إخفاء المحادثات" : "عرض المحادثات"}
             >

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useLayoutEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useViewStore } from "@/lib/store/view-store";
 import type { BuddyMessage } from "@/server/actions/study-buddy-session";
@@ -125,10 +125,11 @@ export function AiStudyBuddyView() {
     !!castedView.initialQuestion
   );
   const [sessionId, setSessionId] = useState<string | null>(null);
-  const [restoring, setRestoring] = useState(true);
+  // Only restore if a saved session exists (this view renders client-side behind AuthGate)
+  const [restoring, setRestoring] = useState(() => loadSessionId() !== null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sessions, setSessions] = useState<SessionListItem[]>([]);
-  const [sessionsLoading, setSessionsLoading] = useState(false);
+  const [sessionsLoading, setSessionsLoading] = useState(true);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [sessionSwitching, setSessionSwitching] = useState(false);
   const [renamingId, setRenamingId] = useState<string | null>(null);
@@ -140,10 +141,13 @@ export function AiStudyBuddyView() {
   const messagesRef = useRef<BuddyMessage[]>([]);
   const sessionIdRef = useRef<string | null>(null);
   const sidebarRef = useRef<HTMLDivElement>(null);
+  const handleSendRef = useRef<((text?: string) => Promise<void>) | null>(null);
 
   // Keep refs in sync with state for the streaming closure
-  messagesRef.current = messages;
-  sessionIdRef.current = sessionId;
+  useLayoutEffect(() => {
+    messagesRef.current = messages;
+    sessionIdRef.current = sessionId;
+  });
 
   // ── Fetch sessions list from DB ────────────────────────────────
   const refreshSessions = useCallback(async () => {
@@ -163,12 +167,11 @@ export function AiStudyBuddyView() {
     const savedId = loadSessionId();
 
     // Always fetch session list in background
-    refreshSessions();
+    getBuddySessions()
+      .then(setSessions, () => {})
+      .finally(() => setSessionsLoading(false));
 
-    if (!savedId) {
-      setRestoring(false);
-      return;
-    }
+    if (!savedId) return;
 
     (async () => {
       try {
@@ -199,8 +202,8 @@ export function AiStudyBuddyView() {
   // ── Auto-send initial question ──────────────────────────────
   useEffect(() => {
     if (castedView.initialQuestion && initialLoading) {
-      setInitialLoading(false);
       const timer = setTimeout(() => {
+        setInitialLoading(false);
         handleSendRef.current?.(castedView.initialQuestion!);
       }, 300);
       return () => clearTimeout(timer);
@@ -505,8 +508,9 @@ export function AiStudyBuddyView() {
     [input, loading, refreshSessions]
   );
 
-  const handleSendRef = useRef(handleSend);
-  handleSendRef.current = handleSend;
+  useLayoutEffect(() => {
+    handleSendRef.current = handleSend;
+  });
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {

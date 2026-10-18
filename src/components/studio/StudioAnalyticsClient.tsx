@@ -1,6 +1,5 @@
 "use client";
 
-import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   BarChart,
@@ -41,6 +40,7 @@ import {
   getNeedsAttention,
   getDailyActivity,
 } from "@/server/actions/studio-analytics";
+import { useHydrated } from "@/hooks/use-hydrated";
 
 // ---------------------------------------------------------------------------
 // Color mapping
@@ -128,10 +128,7 @@ function ChartTooltip({ active, payload, label }: any) {
 // ---------------------------------------------------------------------------
 
 export function StudioAnalyticsClient() {
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  const mounted = useHydrated();
 
   const { data: overview, isLoading: overviewLoading } = useQuery({
     queryKey: ["analytics-overview"],

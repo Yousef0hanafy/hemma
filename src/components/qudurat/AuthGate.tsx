@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { useSession, signIn } from "next-auth/react";
 import {
@@ -37,18 +37,13 @@ import {
  */
 export function AuthGate({ children }: { children: React.ReactNode }) {
   const { status } = useSession();
-  const [showRestore, setShowRestore] = useState(false);
-  const dismissed = useRef(false);
-
-  // Check for a saved pending exam once after auth is confirmed
-  useEffect(() => {
-    if (status === "authenticated" && !dismissed.current) {
-      const saved = loadPendingExam();
-      if (saved) {
-        setShowRestore(true);
-      }
-    }
-  }, [status]);
+  const [dismissed, setDismissed] = useState(false);
+  // Check for a saved pending exam once auth is confirmed (client-only: status is "loading" during SSR)
+  const hasPending = useMemo(
+    () => status === "authenticated" && loadPendingExam() !== null,
+    [status]
+  );
+  const showRestore = hasPending && !dismissed;
 
   if (status === "loading") {
     return <FullScreenLoader label="جارٍ التحقق من الجلسة…" />;
@@ -60,7 +55,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
 
   return (
     <>
-      {showRestore && <SessionRestoreBanner onDismiss={() => { dismissed.current = true; setShowRestore(false); }} />}
+      {showRestore && <SessionRestoreBanner onDismiss={() => setDismissed(true)} />}
       {children}
     </>
   );
@@ -76,7 +71,7 @@ function SessionRestoreBanner({ onDismiss }: { onDismiss: () => void }) {
 
   const handleResume = () => {
     if (!saved) return;
-    clearPendingExam();
+    // Keep the saved state — the runner/player restores progress from it.
     setView(saved.view);
     onDismiss();
   };

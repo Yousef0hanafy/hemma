@@ -85,8 +85,10 @@ export function BulkApplyModal({
   const [loadingPreview, setLoadingPreview] = useState(false);
   const [applying, setApplying] = useState(false);
 
-  // Reset state when modal opens
-  useEffect(() => {
+  // Reset state when modal opens (adjusting state during render, not in an effect)
+  const [wasOpen, setWasOpen] = useState(open);
+  if (open !== wasOpen) {
+    setWasOpen(open);
     if (open) {
       setField("explanation");
       setValue(currentValues.explanation ?? "");
@@ -96,7 +98,7 @@ export function BulkApplyModal({
       setStatusFilter("");
       setPreviewCount(null);
     }
-  }, [open, currentValues]);
+  }
 
   // Update value when field changes
   const handleFieldChange = useCallback(

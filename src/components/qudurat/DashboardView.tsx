@@ -80,13 +80,8 @@ export function DashboardView() {
   const { data: profile, loading: profileLoading } = useUserProfile();
 
   // Check for pending session on mount
-  const [pendingSession, setPendingSession] = useState<PendingSession | null>(null);
-  
-  // Load pending session in an effect to avoid setState during render
-  useEffect(() => {
-    const saved = loadPendingExam();
-    setPendingSession(saved);
-  }, []);
+  // Lazy initializer: the dashboard only renders client-side behind AuthGate
+  const [pendingSession, setPendingSession] = useState<PendingSession | null>(loadPendingExam);
   
   const { data: mastery } = useCategoryMastery();
   const { data: activity } = useDailyActivity();

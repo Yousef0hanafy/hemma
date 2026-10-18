@@ -1,16 +1,14 @@
 "use client";
 
 import { useTheme } from "next-themes";
-import { useEffect, useState } from "react";
+import { useHydrated } from "@/hooks/use-hydrated";
 import { Sun, Moon, Monitor } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export function ThemeToggle() {
   const { theme, setTheme } = useTheme();
-  const [mounted, setMounted] = useState(false);
-
   // Avoid hydration mismatch — icons only render client-side
-  useEffect(() => setMounted(true), []);
+  const mounted = useHydrated();
 
   if (!mounted) {
     return (

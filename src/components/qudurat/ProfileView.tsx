@@ -3,6 +3,7 @@
 import { motion } from "framer-motion";
 import { springEntrance, springProgress, springHover, springTap, fadeUp } from "@/lib/motion-variants";
 import { useViewStore } from "@/lib/store/view-store";
+import { useHydrated } from "@/hooks/use-hydrated";
 import { useServerData } from "@/lib/hooks/use-data";
 import { fetchExtendedProfile } from "@/server/actions/student-profile";
 import type { ExtendedProfile } from "@/server/actions/student-profile";
@@ -570,8 +571,7 @@ export function ProfileView() {
 // ---------------------------------------------------------------------------
 function ThemeSettingsSection() {
   const { theme } = useTheme();
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
+  const mounted = useHydrated();
 
   const icon =
     !mounted ? null :

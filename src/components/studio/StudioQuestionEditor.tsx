@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect, useLayoutEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   springEntrance,
@@ -128,15 +128,22 @@ function InlineEdit({
 
   // Ref that always points to the latest save logic (for external `s` key)
   const saveFnRef = useRef<() => Promise<void>>(async () => {});
-  saveFnRef.current = async () => {
-    if (draft === value) {
-      setEditing(false);
-      return;
-    }
-    setSaving(true);
-    const ok = await onSave(field, draft);
-    setSaving(false);
-    if (ok) setEditing(false);
+  useLayoutEffect(() => {
+    saveFnRef.current = async () => {
+      if (draft === value) {
+        setEditing(false);
+        return;
+      }
+      setSaving(true);
+      const ok = await onSave(field, draft);
+      setSaving(false);
+      if (ok) setEditing(false);
+    };
+  });
+
+  const startEditing = () => {
+    setDraft(value);
+    setEditing(true);
   };
 
   // Register/unregister save handler when editing state changes
@@ -145,23 +152,18 @@ function InlineEdit({
     return () => onRegisterSave?.(null);
   }, [editing]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // External trigger: enter edit mode
-  useEffect(() => {
-    if (externalTrigger && externalTrigger > 0) {
-      setDraft(value);
-      setEditing(true);
-      setTimeout(() => inputRef.current?.focus(), 50);
-    }
-  }, [externalTrigger]); // eslint-disable-line react-hooks/exhaustive-deps
+  // External trigger: enter edit mode (adjusting state during render, not in an effect)
+  const [prevTrigger, setPrevTrigger] = useState(externalTrigger);
+  if (externalTrigger !== prevTrigger) {
+    setPrevTrigger(externalTrigger);
+    if (externalTrigger && externalTrigger > 0) startEditing();
+  }
 
   useEffect(() => {
-    if (editing) {
-      setDraft(value);
-      inputRef.current?.focus();
-    }
-  }, [editing, value]);
+    if (editing) inputRef.current?.focus();
+  }, [editing]);
 
-  const handleSave = saveFnRef.current;
+  const handleSave = () => saveFnRef.current();
 
   const handleCancel = useCallback(() => {
     setDraft(value);
@@ -235,7 +237,7 @@ function InlineEdit({
 
   return (
     <div
-      onClick={() => setEditing(true)}
+      onClick={startEditing}
       className={cn(
         "group cursor-pointer rounded-lg border border-transparent hover:border-border/50 hover:bg-muted/30 transition-all px-2 py-1 -mx-2",
         !value && "text-muted-foreground/60 italic",

@@ -57,6 +57,23 @@ export function loadPendingExam(): PendingSession | null {
   }
 }
 
+/** Saved progress for this exam session, or null if the pending state belongs to another session. */
+export function loadPendingExamFor(sessionId: string): PendingExamInternal | null {
+  const saved = loadPendingExam();
+  return saved?.view.kind === "exam_running" && saved.view.sessionId === sessionId
+    ? saved.internal
+    : null;
+}
+
+/** Saved progress for this study session, or null if the pending state belongs to another session. */
+export function loadPendingStudyFor(questionIds: string[]): PendingExamInternal | null {
+  const saved = loadPendingExam();
+  return saved?.view.kind === "study" &&
+    saved.view.questionIds?.join(",") === questionIds.join(",")
+    ? saved.internal
+    : null;
+}
+
 export function clearPendingExam(): void {
   try {
     localStorage.removeItem(STORAGE_KEY);

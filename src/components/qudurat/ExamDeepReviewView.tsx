@@ -87,11 +87,6 @@ export function ExamDeepReviewView({
   const totalFiltered = filteredIndices.length;
   const totalAll = questions?.length ?? 0;
 
-  // Reset to first when toggling filter
-  useEffect(() => {
-    setCurrentIndex(0);
-  }, [showWrongOnly]);
-
   // Keyboard shortcuts
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
@@ -165,7 +160,11 @@ export function ExamDeepReviewView({
         {/* Filter toggle */}
         {wrongIndices.length > 0 && (
           <button
-            onClick={() => setShowWrongOnly(!showWrongOnly)}
+            onClick={() => {
+              // Reset to first when toggling filter
+              setShowWrongOnly(!showWrongOnly);
+              setCurrentIndex(0);
+            }}
             className={cn(
               "flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-all",
               showWrongOnly

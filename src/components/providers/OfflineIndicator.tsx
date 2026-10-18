@@ -56,17 +56,13 @@ export function OfflineIndicator() {
   useEffect(() => {
     let cancelled = false;
 
-    // 1. FAST PATH — navigator.onLine is instant. If it says offline,
-    //    show the banner immediately. The reliable fetch below will
-    //    correct false positives.
-    if (typeof navigator !== "undefined" && !navigator.onLine) {
-      setOffline(true);
-    }
-
-    // 2. RELIABLE PATH — fetch-based check corrects navigator.onLine
+    // 1. FAST PATH — navigator.onLine is instant: if it says offline, trust it.
+    // 2. RELIABLE PATH — otherwise a fetch-based check corrects navigator.onLine
     //    false positives (localhost, browser extensions, etc.)
     async function verify() {
-      const online = await checkReachable(AbortSignal.timeout(5000));
+      const online = navigator.onLine
+        ? await checkReachable(AbortSignal.timeout(5000))
+        : false;
       if (!cancelled) {
         setOffline(!online);
         // If we're actually online, reset the dismissed flag for next time

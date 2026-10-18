@@ -234,9 +234,11 @@ function SettingRow({
 }) {
   const [dirty, setDirty] = useState(value);
   // Sync dirty when value changes externally (e.g., after a reset)
-  useEffect(() => {
+  const [prevValue, setPrevValue] = useState(value);
+  if (value !== prevValue) {
+    setPrevValue(value);
     setDirty(value);
-  }, [value]);
+  }
   const synced = dirty === value;
 
   // Render the appropriate input based on type

@@ -37,7 +37,7 @@ import { OptionCard } from "./shared/OptionCard";
 import { PassageView } from "./shared/PassageView";
 import {
   savePendingExam,
-  loadPendingExam,
+  loadPendingExamFor,
   clearPendingExam,
 } from "@/lib/exam-persistence";
 
@@ -56,13 +56,10 @@ export function ExamRunnerView({
   const finalizeExam = useFinalizeExam();
   const autoRegisterMistake = useAutoRegisterMistake();
 
-  // Restore persisted state if available (e.g. after session expiry)
-  const persisted = useRef(loadPendingExam());
-  const savedInternal = persisted.current?.view.kind === "exam_running"
-    ? persisted.current.internal
-    : null;
+  // Restore persisted state for this session if available (e.g. after session expiry)
+  const [savedInternal] = useState(() => loadPendingExamFor(sessionId));
 
-  const examStartTime = useRef(Date.now());
+  const [examStartTime] = useState(() => Date.now());
   const [currentIndex, setCurrentIndex] = useState(savedInternal?.currentIndex ?? 0);
   const [selections, setSelections] = useState<Record<string, ArabicLetter | null>>(
     savedInternal?.selections as Record<string, ArabicLetter | null> ?? {}
@@ -76,14 +73,6 @@ export function ExamRunnerView({
   const current = questions?.[currentIndex];
   const total = questions?.length ?? 0;
   const answered = Object.values(selections).filter(Boolean).length;
-
-  // Clear persisted state once restored
-  useEffect(() => {
-    if (persisted.current) {
-      persisted.current = null;
-      clearPendingExam();
-    }
-  }, []);
 
   // Persist internal state on every change (for session-expiry recovery)
   useEffect(() => {
@@ -103,7 +92,7 @@ export function ExamRunnerView({
       for (const q of questions ?? []) {
         finalSelections[q.id] = selections[q.id] ?? null;
       }
-      const actualDurationSec = Math.floor((Date.now() - examStartTime.current) / 1000);
+      const actualDurationSec = Math.floor((Date.now() - examStartTime) / 1000);
       await finalizeExam(sessionId, questionIds, finalSelections, actualDurationSec);
       clearPendingExam();
       setView({
@@ -123,19 +112,24 @@ export function ExamRunnerView({
 
   // Timer countdown
   useEffect(() => {
-    if (durationSec === 0) return; // no time limit
-    if (timeLeft <= 0) {
-      handleSubmit();
-      return;
-    }
-    const id = setTimeout(() => setTimeLeft((t) => t - 1), 1000);
+    if (durationSec === 0 || submitting) return; // no time limit / already submitting
+    const id = setTimeout(() => {
+      if (timeLeft <= 1) {
+        setTimeLeft(0);
+        handleSubmit();
+      } else {
+        setTimeLeft(timeLeft - 1);
+      }
+    }, 1000);
     return () => clearTimeout(id);
-  }, [timeLeft, durationSec, handleSubmit]);
+  }, [timeLeft, durationSec, submitting, handleSubmit]);
 
   // Track question start time via ref (no re-render needed)
-  if (current && !questionStartTimesRef.current[current.id]) {
-    questionStartTimesRef.current[current.id] = Date.now();
-  }
+  useEffect(() => {
+    if (current && !questionStartTimesRef.current[current.id]) {
+      questionStartTimesRef.current[current.id] = Date.now();
+    }
+  }, [current]);
 
   const selectAnswer = useCallback(
     async (key: ArabicLetter) => {

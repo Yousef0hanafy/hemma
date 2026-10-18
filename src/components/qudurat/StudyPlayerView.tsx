@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import {
@@ -40,7 +40,7 @@ import { AnimatedChip } from "./shared/AnimatedChip";
 import { PassageView } from "./shared/PassageView";
 import {
   savePendingExam,
-  loadPendingExam,
+  loadPendingStudyFor,
   clearPendingExam,
 } from "@/lib/exam-persistence";
 
@@ -57,16 +57,12 @@ export function StudyPlayerView({
   const { data: nextReviewDate, refresh: refreshNextReview } = useNextReviewDate();
 
   // Restore persisted currentIndex if available (e.g. after session expiry)
-  const persisted = useRef(loadPendingExam());
-  const savedIndex =
-    persisted.current?.view.kind === "study"
-      ? persisted.current.internal.currentIndex
-      : null;
-  const [currentIndex, setCurrentIndex] = useState(savedIndex ?? 0);
+  const [currentIndex, setCurrentIndex] = useState(
+    () => loadPendingStudyFor(questionIds)?.currentIndex ?? 0
+  );
   const [done, setDone] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
-  const resultsRef = useRef({ correct: 0, total: 0 });
-  const sessionXpRef = useRef(0);
+  const [results, setResults] = useState({ correct: 0, total: 0, xp: 0 });
 
   // Elapsed timer — ticks every second while the session is active
   useEffect(() => {
@@ -77,31 +73,27 @@ export function StudyPlayerView({
     return () => clearInterval(id);
   }, [done]);
 
-  // Clear persisted state once restored
-  useEffect(() => {
-    if (persisted.current) {
-      persisted.current = null;
-      clearPendingExam();
-    }
-  }, []);
-
   // Persist currentIndex on every change (for session-expiry recovery)
   useEffect(() => {
+    if (done) return;
     savePendingExam({
       view: { kind: "study", questionIds, ...(categorySlug ? { categorySlug } : {}) },
       internal: { currentIndex, selections: {}, timeLeft: 0 },
       savedAt: Date.now(),
     });
-  }, [currentIndex, questionIds, categorySlug]);
+  }, [done, currentIndex, questionIds, categorySlug]);
 
   const onResult = useCallback((isCorrect: boolean, xpGained?: number) => {
-    resultsRef.current.total++;
-    if (isCorrect) resultsRef.current.correct++;
-    if (xpGained) sessionXpRef.current += xpGained;
+    setResults((r) => ({
+      correct: r.correct + (isCorrect ? 1 : 0),
+      total: r.total + 1,
+      xp: r.xp + (xpGained ?? 0),
+    }));
   }, []);
 
   const onFinish = useCallback(() => {
     refreshNextReview();
+    clearPendingExam();
     setDone(true);
   }, [refreshNextReview]);
 
@@ -109,10 +101,10 @@ export function StudyPlayerView({
   if (done) {
     return (
       <SessionSummary
-        correct={resultsRef.current.correct}
-        total={resultsRef.current.total}
+        correct={results.correct}
+        total={results.total}
         elapsedSeconds={elapsedSeconds}
-        xpEarned={sessionXpRef.current}
+        xpEarned={results.xp}
         nextReviewDate={nextReviewDate}
         isReview={purpose === "review"}
       />
