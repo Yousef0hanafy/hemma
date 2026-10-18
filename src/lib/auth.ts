@@ -4,6 +4,10 @@ import GoogleProvider from "next-auth/providers/google";
 import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { db } from "./db";
+import { clientIpFromHeaders, consumeRateLimit, RATE_LIMITS } from "./rate-limiter";
+
+/** Error code surfaced to the client by signIn() when login is throttled. */
+export const LOGIN_RATE_LIMITED = "RATE_LIMITED";
 
 // ── Token Revocation Store ─────────────────────────────────────
 // Database-backed token revocation store for multi-instance support
@@ -152,9 +156,18 @@ function buildProviders() {
         email: { label: "البريد الإلكتروني", type: "email" },
         password: { label: "كلمة المرور", type: "password" },
       },
-      async authorize(credentials) {
+      async authorize(credentials, req) {
         if (!credentials?.email || !credentials?.password) {
           return null;
+        }
+
+        // Brute-force protection: per email and per client IP
+        const [perEmail, perIp] = await Promise.all([
+          consumeRateLimit(RATE_LIMITS.loginPerEmail, credentials.email.trim().toLowerCase()),
+          consumeRateLimit(RATE_LIMITS.loginPerIp, clientIpFromHeaders(req?.headers)),
+        ]);
+        if (!perEmail.success || !perIp.success) {
+          throw new Error(LOGIN_RATE_LIMITED);
         }
 
         const user = await db.user.findFirst({

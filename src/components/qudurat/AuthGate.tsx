@@ -225,7 +225,9 @@ function LoginPrompt() {
         redirect: false,
       });
 
-      if (result?.error) {
+      if (result?.error === "RATE_LIMITED") {
+        setLoginError("محاولات كثيرة لتسجيل الدخول. انتظر ١٥ دقيقة ثم حاول مرة أخرى.");
+      } else if (result?.error) {
         setLoginError("البريد الإلكتروني أو كلمة المرور غير صحيحة");
       } else if (result?.ok) {
         // Force page reload to pick up the new session

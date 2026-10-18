@@ -523,6 +523,11 @@ export async function bulkApplyField(
     }
   }
 
+  // An empty filter would overwrite the whole question bank
+  if (!filter.categorySlug && !filter.sourceSlug && !filter.difficulty && !filter.status) {
+    throw new Error("اختر فلترًا واحدًا على الأقل (التصنيف أو المصدر أو الصعوبة أو الحالة)");
+  }
+
   const where: Record<string, unknown> = {};
 
   if (filter.categorySlug) {
@@ -541,10 +546,11 @@ export async function bulkApplyField(
     where.id = { not: filter.excludeQuestionId };
   }
 
-  const questions = await db.question.findMany({
+  // Read the current values too, so each version row can be undone
+  const questions = (await db.question.findMany({
     where: where as any,
-    select: { id: true },
-  });
+    select: { id: true, [field]: true },
+  })) as unknown as Array<{ id: string } & Record<string, string | null>>;
 
   const questionIds = questions.map((q) => q.id);
   if (questionIds.length === 0) return { updated: 0 };
@@ -557,9 +563,10 @@ export async function bulkApplyField(
     });
 
     await tx.questionVersion.createMany({
-      data: questionIds.map((qId) => ({
-        questionId: qId,
+      data: questions.map((q) => ({
+        questionId: q.id,
         field,
+        oldValue: q[field] ?? null,
         newValue: value,
         changedBy: userId,
       })),

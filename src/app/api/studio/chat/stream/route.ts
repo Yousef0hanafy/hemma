@@ -12,7 +12,7 @@ import { STUDIO_ROLES } from "@/lib/studio-auth";
 import { getGeminiClient, getAIModelName } from "@/server/ai/evaluator";
 import { buildSystemPrompt } from "@/server/ai/studio-chat-prompt";
 import type { ChatMessage } from "@/server/actions/studio-chat";
-import { aiRateLimiter, getClientIdentifier, rateLimitResponse } from "@/lib/rate-limiter";
+import { consumeRateLimit, RATE_LIMITS, rateLimitResponse } from "@/lib/rate-limiter";
 
 // ---------------------------------------------------------------------
 // Constants
@@ -160,8 +160,7 @@ export async function POST(req: NextRequest) {
   }
 
   // ── Rate limiting ──────────────────────────────────────────────
-  const clientIdentifier = getClientIdentifier(req);
-  const rateLimitResult = aiRateLimiter.check(clientIdentifier);
+  const rateLimitResult = await consumeRateLimit(RATE_LIMITS.aiPerUser, session.user.id);
   const rateLimitResponseResult = rateLimitResponse(rateLimitResult);
   if (rateLimitResponseResult) return rateLimitResponseResult;
 

@@ -2,6 +2,7 @@
 
 import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/auth";
+import { isValidId } from "@/lib/studio-auth";
 
 // ---------------------------------------------------------------------------
 // DTOs
@@ -225,10 +226,16 @@ export async function bulkUpdateDifficulty(ids: string[], difficulty: string) {
 
 export async function bulkDeleteQuestions(ids: string[]) {
   await requirePermission("library", "delete");
-  await db.attempt.deleteMany({ where: { questionId: { in: ids } } });
-  await db.favorite.deleteMany({ where: { questionId: { in: ids } } });
-  await db.reviewSchedule.deleteMany({ where: { questionId: { in: ids } } });
-  await db.contentReview.deleteMany({ where: { questionId: { in: ids } } });
-  await db.question.deleteMany({ where: { id: { in: ids } } });
-  return { deleted: ids.length };
+  if (!Array.isArray(ids) || ids.length === 0 || ids.length > 500 || !ids.every(isValidId)) {
+    throw new Error("قائمة الأسئلة غير صالحة");
+  }
+  // All-or-nothing: a partial failure must not leave orphaned student data
+  const [, , , , deleted] = await db.$transaction([
+    db.attempt.deleteMany({ where: { questionId: { in: ids } } }),
+    db.favorite.deleteMany({ where: { questionId: { in: ids } } }),
+    db.reviewSchedule.deleteMany({ where: { questionId: { in: ids } } }),
+    db.contentReview.deleteMany({ where: { questionId: { in: ids } } }),
+    db.question.deleteMany({ where: { id: { in: ids } } }),
+  ]);
+  return { deleted: deleted.count };
 }

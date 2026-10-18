@@ -8,7 +8,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { getGeminiClient, getAIModelName } from "@/server/ai/evaluator";
-import { aiRateLimiter, getClientIdentifier, rateLimitResponse } from "@/lib/rate-limiter";
+import { consumeRateLimit, RATE_LIMITS, rateLimitResponse } from "@/lib/rate-limiter";
 
 // -------------------------------------------------------------------
 // Constants
@@ -74,12 +74,6 @@ export async function GET(request: Request) {
     );
   }
   const userId = session.user.id;
-
-  // ── Rate limiting ──────────────────────────────────────────────
-  const clientIdentifier = getClientIdentifier(request);
-  const rateLimitResult = aiRateLimiter.check(clientIdentifier);
-  const rateLimitResponseResult = rateLimitResponse(rateLimitResult);
-  if (rateLimitResponseResult) return rateLimitResponseResult;
 
   const url = new URL(request.url);
   const sessionId = url.searchParams.get("sessionId");
@@ -251,9 +245,8 @@ export async function POST(request: Request) {
   }
   const userId = session.user.id;
 
-  // ── Rate limiting ──────────────────────────────────────────────
-  const clientIdentifier = getClientIdentifier(request);
-  const rateLimitResult = aiRateLimiter.check(clientIdentifier);
+  // ── Rate limiting (per user — shared across serverless instances) ──
+  const rateLimitResult = await consumeRateLimit(RATE_LIMITS.aiPerUser, userId);
   const rateLimitResponseResult = rateLimitResponse(rateLimitResult);
   if (rateLimitResponseResult) return rateLimitResponseResult;
 

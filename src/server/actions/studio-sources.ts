@@ -206,26 +206,17 @@ export async function getSourcesProcessingStatus(): Promise<
 export async function deleteSource(id: string): Promise<{ deleted: boolean }> {
   await requirePermission("sources", "delete");
 
-  const questions = await db.question.findMany({
-    where: { sourceId: id },
-    select: { id: true },
-  });
-  const questionIds = questions.map((q) => q.id);
-
-  if (questionIds.length > 0) {
-    await db.attempt.deleteMany({ where: { questionId: { in: questionIds } } });
-    await db.favorite.deleteMany({ where: { questionId: { in: questionIds } } });
-    await db.reviewSchedule.deleteMany({
-      where: { questionId: { in: questionIds } },
-    });
-    await db.contentReview.deleteMany({
-      where: { questionId: { in: questionIds } },
-    });
-    await db.question.deleteMany({ where: { sourceId: id } });
-  }
-
-  await db.passage.deleteMany({ where: { sourceId: id } });
-  await db.source.delete({ where: { id } });
+  // All-or-nothing: a partial failure must not leave orphaned rows behind
+  const ofSource = { question: { sourceId: id } };
+  await db.$transaction([
+    db.attempt.deleteMany({ where: ofSource }),
+    db.favorite.deleteMany({ where: ofSource }),
+    db.reviewSchedule.deleteMany({ where: ofSource }),
+    db.contentReview.deleteMany({ where: ofSource }),
+    db.question.deleteMany({ where: { sourceId: id } }),
+    db.passage.deleteMany({ where: { sourceId: id } }),
+    db.source.delete({ where: { id } }),
+  ]);
 
   return { deleted: true };
 }

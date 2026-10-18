@@ -44,19 +44,6 @@ export interface SettingsDTO {
   [key: string]: string;
 }
 
-async function ensureSettingsTable() {
-  try {
-    await db.$executeRawUnsafe(`
-      CREATE TABLE IF NOT EXISTS "studio_settings" (
-        "key" TEXT PRIMARY KEY,
-        "value" TEXT NOT NULL
-      );
-    `);
-  } catch (e) {
-    // Ignore if table exists or permission issue
-  }
-}
-
 // ---------------------------------------------------------------------------
 // Get all settings (with defaults for any missing)
 // ---------------------------------------------------------------------------
@@ -70,7 +57,6 @@ export async function getSettings(): Promise<SettingsDTO> {
   }
 
   try {
-    await ensureSettingsTable();
     const stored = await db.studioSetting.findMany();
     const storedMap = new Map(stored.map((s) => [s.key, s.value]));
 
@@ -127,7 +113,6 @@ export async function updateSetting(
     }
   }
 
-  await ensureSettingsTable();
 
   await db.studioSetting.upsert({
     where: { key },
@@ -149,7 +134,6 @@ export async function resetSetting(key: string): Promise<{ ok: boolean }> {
     throw new Error(`الإعداد "${key}" غير معروف`);
   }
 
-  await ensureSettingsTable();
   await db.studioSetting.delete({ where: { key } }).catch(() => {});
   return { ok: true };
 }
@@ -161,7 +145,6 @@ export async function resetSetting(key: string): Promise<{ ok: boolean }> {
 export async function resetAllSettings(): Promise<{ ok: boolean }> {
   await requireAdminAccess("ليس لديك صلاحية لتعديل الإعدادات");
 
-  await ensureSettingsTable();
   await db.studioSetting.deleteMany().catch(() => {});
   return { ok: true };
 }

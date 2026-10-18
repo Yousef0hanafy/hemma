@@ -24,37 +24,8 @@ export interface IngestResponse {
   error?: string;
 }
 
-async function ensureDbColumns() {
-  try {
-    await db.$executeRawUnsafe(`
-      ALTER TABLE sources ADD COLUMN IF NOT EXISTS "originalFilename" text;
-      ALTER TABLE sources ADD COLUMN IF NOT EXISTS "fileUrl" text;
-      ALTER TABLE sources ADD COLUMN IF NOT EXISTS "mimeType" text;
-      ALTER TABLE sources ADD COLUMN IF NOT EXISTS "sourceType" text DEFAULT 'document';
-      ALTER TABLE sources ADD COLUMN IF NOT EXISTS "status" text DEFAULT 'review';
-      ALTER TABLE sources ADD COLUMN IF NOT EXISTS "metadata" text DEFAULT '{}';
-      ALTER TABLE sources ADD COLUMN IF NOT EXISTS "questionCount" integer DEFAULT 0;
-    `);
-  } catch (e) {
-    console.warn("[StudioIngest] sources table schema check:", e);
-  }
-
-  try {
-    await db.$executeRawUnsafe(`
-      ALTER TABLE questions ADD COLUMN IF NOT EXISTS "status" text DEFAULT 'published';
-      ALTER TABLE questions ADD COLUMN IF NOT EXISTS "metadata" text DEFAULT '{}';
-      ALTER TABLE questions ADD COLUMN IF NOT EXISTS "tags" text DEFAULT '[]';
-      ALTER TABLE questions ADD COLUMN IF NOT EXISTS "citation" text;
-      ALTER TABLE questions ADD COLUMN IF NOT EXISTS "explanation" text;
-      ALTER TABLE questions ADD COLUMN IF NOT EXISTS "studyTip" text;
-      ALTER TABLE questions ADD COLUMN IF NOT EXISTS "passageId" text;
-    `);
-  } catch (e) {
-    console.warn("[StudioIngest] questions table schema check:", e);
-  }
-}
-
-async function safeCreateSource(data: {
+/** Create the source record for an upload (schema is managed by Prisma migrations). */
+async function createSource(data: {
   slug: string;
   title: string;
   date?: string | null;
@@ -64,30 +35,18 @@ async function safeCreateSource(data: {
   sourceType?: string;
   status?: string;
 }) {
-  await ensureDbColumns();
-  try {
-    return await db.source.create({
-      data: {
-        slug: data.slug,
-        title: data.title,
-        date: data.date ?? null,
-        originalFilename: data.originalFilename ?? null,
-        fileUrl: data.fileUrl ?? null,
-        mimeType: data.mimeType ?? null,
-        sourceType: data.sourceType ?? "document",
-        status: data.status ?? "review",
-      },
-    });
-  } catch (err) {
-    console.warn("[StudioIngest] create source retry fallback:", err);
-    return await db.source.create({
-      data: {
-        slug: data.slug,
-        title: data.title,
-        date: data.date ?? null,
-      },
-    });
-  }
+  return db.source.create({
+    data: {
+      slug: data.slug,
+      title: data.title,
+      date: data.date ?? null,
+      originalFilename: data.originalFilename ?? null,
+      fileUrl: data.fileUrl ?? null,
+      mimeType: data.mimeType ?? null,
+      sourceType: data.sourceType ?? "document",
+      status: data.status ?? "review",
+    },
+  });
 }
 
 /**
@@ -141,7 +100,7 @@ export async function ingestSourceDocument(formData: FormData): Promise<IngestRe
       // Store file
       const stored = await storeSourceFile(fileBuffer, file.name, slug, file.type || "application/json");
 
-      const sourceRecord = await safeCreateSource({
+      const sourceRecord = await createSource({
         slug,
         title: rawSource.document_title || file.name.replace(/\.json$/i, ""),
         date: rawSource.date ?? null,
@@ -218,7 +177,7 @@ export async function ingestSourceDocument(formData: FormData): Promise<IngestRe
 
     // Create initial tracking record in DB
     const initialTitle = path.basename(file.name, ext).replace(/[-_]/g, " ");
-    const sourceRecord = await safeCreateSource({
+    const sourceRecord = await createSource({
       slug,
       title: initialTitle,
       originalFilename: stored.originalFilename,

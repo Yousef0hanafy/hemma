@@ -118,10 +118,10 @@ SENTRY_AUTH_TOKEN="your-sentry-auth-token"
 ## 6. Local Development Guide
 
 1. **Initialize the Database:**
-   Push the Prisma schema to your local or Neon Postgres database:
+   Apply the migrations to your local or Neon Postgres database
+   (see `docs/05-SETUP.md` for the one-time step on an existing database):
    ```bash
-   npm run db:push
-   npm run db:generate
+   pnpm db:deploy
    ```
 2. **Start the Development Server:**
    ```bash

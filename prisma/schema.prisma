@@ -1,7 +1,8 @@
 // =====================================================================
-// Qudurat LMS — Prisma Schema
-// Schema is portable: change `provider` from "sqlite" to "postgres"
-// and set DATABASE_URL to a Neon connection string to migrate.
+// Qudurat LMS — Prisma Schema (PostgreSQL / Neon)
+// Change the schema with `pnpm db:migrate` (creates a migration in
+// prisma/migrations); apply to production with `prisma migrate deploy`.
+// Never use `db push` against production.
 // =====================================================================
 
 generator client {
@@ -27,7 +28,7 @@ model Source {
   fileUrl          String?
   mimeType         String?
   sourceType       String            @default("document") // document | legacy_json
-  status           String            @default("review")   // processing | review | published | failed
+  status           String            @default("review") // processing | review | published | failed
   importedAt       DateTime          @default(now())
   questionCount    Int               @default(0)
   metadata         String            @default("{}")
@@ -62,6 +63,7 @@ model Passage {
   metadata  String     @default("{}")
   questions Question[]
 
+  @@index([sourceId])
   @@map("passages")
 }
 
@@ -89,7 +91,7 @@ model Question {
   aiQualityScore   Float?
   metadata         String            @default("{}")
   createdAt        DateTime          @default(now())
-  updatedAt  DateTime  @updatedAt @default(now())
+  updatedAt        DateTime          @default(now()) @updatedAt
   attempts         Attempt[]
   favorites        Favorite[]
   reviews          ContentReview[]
@@ -128,6 +130,7 @@ model Attempt {
   @@index([sessionId])
   @@index([createdAt])
   @@index([userBucket, createdAt])
+  @@index([questionId])
   @@map("attempts")
 }
 
@@ -141,6 +144,7 @@ model Favorite {
   createdAt  DateTime @default(now())
 
   @@unique([userBucket, questionId])
+  @@index([questionId])
   @@map("favorites")
 }
 
@@ -230,6 +234,7 @@ model ReviewSchedule {
 
   @@unique([userBucket, questionId])
   @@index([userBucket, nextReviewAt])
+  @@index([questionId])
   @@map("review_schedules")
 }
 
@@ -305,6 +310,17 @@ model StudioSetting {
   @@map("studio_settings")
 }
 
+/// Fixed-window rate-limit counters, shared by all serverless instances
+/// (an in-memory limiter is per-instance and useless on Vercel).
+model RateLimitBucket {
+  key     String   @id
+  count   Int      @default(0)
+  resetAt DateTime
+
+  @@index([resetAt])
+  @@map("rate_limit_buckets")
+}
+
 // ---------------------------------------------------------------------
 // VERSION HISTORY — tracks field-level changes to questions
 // ---------------------------------------------------------------------
@@ -319,6 +335,7 @@ model QuestionVersion {
   newValue   String?
   changedBy  String?
   createdAt  DateTime @default(now())
+
   @@index([questionId])
   @@map("question_versions")
 }
@@ -334,7 +351,7 @@ model ChatSession {
   user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   title     String        @default("محادثة جديدة")
   createdAt DateTime      @default(now())
-  updatedAt DateTime @updatedAt
+  updatedAt DateTime      @updatedAt
   messages  ChatMessage[]
 
   @@index([userId])
@@ -376,6 +393,7 @@ model Account {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([provider, providerAccountId])
+  @@index([userId])
   @@map("accounts")
 }
 
@@ -386,6 +404,7 @@ model Session {
   expires      DateTime
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([userId])
   @@map("sessions")
 }
 

@@ -3,6 +3,8 @@
 import { db } from "@/lib/db";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
+import { headers } from "next/headers";
+import { clientIpFromHeaders, consumeRateLimit, RATE_LIMITS } from "@/lib/rate-limiter";
 
 // ---------------------------------------------------------------------------
 // Validation
@@ -34,6 +36,14 @@ export async function signupWithEmail(
   formData: FormData
 ): Promise<SignupResult> {
   try {
+    const limit = await consumeRateLimit(
+      RATE_LIMITS.signupPerIp,
+      clientIpFromHeaders(Object.fromEntries(await headers()))
+    );
+    if (!limit.success) {
+      return { success: false, error: "تم إنشاء حسابات كثيرة من هذا الجهاز. حاول لاحقاً." };
+    }
+
     const raw = {
       name: formData.get("name") as string,
       email: formData.get("email") as string,

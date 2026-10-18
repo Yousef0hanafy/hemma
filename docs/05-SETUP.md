@@ -53,11 +53,10 @@ AI_MODEL=gemini-2.0-flash
 SENTRY_DSN=
 ```
 
-### 3. Sync Database
+### 3. Create the Database Schema
 
 ```bash
-npx prisma db push
-npx prisma generate
+pnpm db:deploy     # applies prisma/migrations
 ```
 
 ### 4. Seed Content (Optional)
@@ -90,9 +89,11 @@ Visit `http://localhost:3000`
 | `pnpm lint` | ESLint |
 | `pnpm test` | Run Vitest tests |
 | `pnpm test:watch` | Tests in watch mode |
-| `pnpm db:push` | Push Prisma schema to database |
+| `pnpm db:deploy` | Apply pending migrations (local DB or production) |
+| `pnpm db:status` | Show which migrations are applied |
 | `pnpm db:generate` | Generate Prisma client |
-| `pnpm db:migrate` | Create a new migration |
+| `pnpm db:migrate` | Create a new migration after editing the schema (dev DB only) |
+| `pnpm admin:grant <email> [role]` | Give a user a studio role |
 
 ---
 
@@ -110,19 +111,43 @@ Visit `http://localhost:3000`
 ```bash
 createdb hemma
 # Set DATABASE_URL=postgresql://localhost:5432/hemma
-npx prisma db push
+pnpm db:deploy
 ```
 
 ### Schema Updates
 
-After modifying `prisma/schema.prisma`:
+The schema is managed with **migrations** (`prisma/migrations`). Don't use
+`prisma db push` against production: it changes the database without a
+record, which is how production drifted from the schema before.
 
 ```bash
-# For development (auto-sync):
-npx prisma db push
+# 1. Edit prisma/schema.prisma, then create a migration against your dev DB:
+pnpm db:migrate --name describe_change
+# 2. Commit the new folder in prisma/migrations
+# 3. Apply it to production:
+DATABASE_URL="<neon url>" pnpm db:deploy
+```
 
-# For production (migration file):
-npx prisma migrate dev --name describe_change
+### One-time: moving an existing `db push` database to migrations
+
+Production was created with `db push`, so Prisma doesn't know the baseline
+is already there. Do this **once**, ideally on a Neon branch first
+(Neon console → Branches → Create branch — it's an instant copy):
+
+```bash
+export DATABASE_URL="<neon url>"
+
+# 1. Mark the baseline (the schema as it was) as already applied
+npx prisma migrate resolve --applied 0_init
+
+# 2. Apply the rest. The first one is idempotent: it repairs drift left by
+#    the old runtime ALTER TABLE code, then adds indexes + rate-limit table
+pnpm db:deploy
+
+# 3. Verify the database now matches the schema exactly
+npx prisma migrate diff --from-url "$DATABASE_URL" \
+  --to-schema-datamodel prisma/schema.prisma --exit-code
+# exit code 0 / "No difference detected" = done
 ```
 
 ---

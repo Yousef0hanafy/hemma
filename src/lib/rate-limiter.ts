@@ -1,105 +1,82 @@
-// Simple in-memory rate limiter for API endpoints
-// For multi-instance deployments, replace with Redis-based implementation
+// =====================================================================
+// Rate limiting backed by Postgres (rate_limit_buckets).
+// Vercel runs many short-lived instances, so counters must live in shared
+// storage — an in-memory Map is per-instance and effectively no limit.
+// Fixed window: one atomic upsert per check.
+// =====================================================================
 
-interface RateLimitEntry {
-  count: number;
+import { db } from "@/lib/db";
+
+export interface RateLimitRule {
+  /** Key prefix, also used in logs */
+  name: string;
+  /** Max requests per window */
+  max: number;
+  windowMs: number;
+}
+
+export const RATE_LIMITS = {
+  /** Password attempts per email address */
+  loginPerEmail: { name: "login-email", max: 10, windowMs: 15 * 60_000 },
+  /** Password attempts per client IP (many emails from one IP) */
+  loginPerIp: { name: "login-ip", max: 30, windowMs: 15 * 60_000 },
+  /** New accounts per client IP */
+  signupPerIp: { name: "signup-ip", max: 5, windowMs: 60 * 60_000 },
+  /** AI chat messages per user */
+  aiPerUser: { name: "ai-user", max: 20, windowMs: 60_000 },
+} satisfies Record<string, RateLimitRule>;
+
+export interface RateLimitResult {
+  success: boolean;
+  limit: number;
+  remaining: number;
   resetTime: number;
 }
 
-interface RateLimitConfig {
-  windowMs: number;  // Time window in milliseconds
-  max: number;      // Max requests per window
-}
+/**
+ * Count one request against `rule` for `identifier`.
+ * Fails open (allows the request) if the database is unreachable, so a DB
+ * hiccup degrades to "no limit" instead of locking everyone out.
+ */
+export async function consumeRateLimit(
+  rule: RateLimitRule,
+  identifier: string
+): Promise<RateLimitResult> {
+  const key = `${rule.name}:${identifier}`.slice(0, 256);
+  try {
+    // resetAt is stored as UTC (timestamp without time zone), like Prisma does.
+    const rows = await db.$queryRaw<{ count: number; resetAt: Date }[]>`
+      INSERT INTO "rate_limit_buckets" ("key", "count", "resetAt")
+      VALUES (${key}, 1, (NOW() AT TIME ZONE 'UTC') + ${rule.windowMs} * INTERVAL '1 millisecond')
+      ON CONFLICT ("key") DO UPDATE SET
+        "count" = CASE WHEN "rate_limit_buckets"."resetAt" <= (NOW() AT TIME ZONE 'UTC')
+                       THEN 1 ELSE "rate_limit_buckets"."count" + 1 END,
+        "resetAt" = CASE WHEN "rate_limit_buckets"."resetAt" <= (NOW() AT TIME ZONE 'UTC')
+                         THEN EXCLUDED."resetAt" ELSE "rate_limit_buckets"."resetAt" END
+      RETURNING "count", "resetAt"`;
+    const { count, resetAt } = rows[0];
 
-class RateLimiter {
-  private store: Map<string, RateLimitEntry>;
-  private config: RateLimitConfig;
-  private cleanupInterval: NodeJS.Timeout | null = null;
-
-  constructor(config: RateLimitConfig) {
-    this.store = new Map();
-    this.config = config;
-    
-    // Cleanup expired entries periodically
-    this.cleanupInterval = setInterval(() => {
-      this.cleanup();
-    }, this.config.windowMs);
-  }
-
-  private cleanup(): void {
-    const now = Date.now();
-    for (const [key, entry] of this.store.entries()) {
-      if (entry.resetTime <= now) {
-        this.store.delete(key);
-      }
-    }
-  }
-
-  /**
-   * Atomic check-and-increment to prevent race conditions
-   * Returns success only if the request is within the rate limit
-   */
-  public check(identifier: string): { success: boolean; remaining: number; resetTime: number } {
-    const now = Date.now();
-    const entry = this.store.get(identifier);
-
-    if (!entry || entry.resetTime <= now) {
-      // Create new entry atomically
-      const resetTime = now + this.config.windowMs;
-      this.store.set(identifier, { count: 1, resetTime });
-      return {
-        success: true,
-        remaining: this.config.max - 1,
-        resetTime,
-      };
+    // Occasionally purge expired buckets so the table stays small
+    if (Math.random() < 0.01) {
+      db.rateLimitBucket
+        .deleteMany({ where: { resetAt: { lt: new Date() } } })
+        .catch(() => {});
     }
 
-    if (entry.count >= this.config.max) {
-      // Rate limit exceeded - log the violation
-      console.warn(
-        `[RateLimiter] Rate limit exceeded for identifier: ${identifier}, ` +
-        `count: ${entry.count}, max: ${this.config.max}, ` +
-        `resetTime: ${new Date(entry.resetTime).toISOString()}`
-      );
-      return {
-        success: false,
-        remaining: 0,
-        resetTime: entry.resetTime,
-      };
+    if (count > rule.max) {
+      console.warn(`[RateLimiter] ${rule.name} limit exceeded for ${identifier}`);
     }
-
-    // Increment count atomically
-    entry.count++;
     return {
-      success: true,
-      remaining: this.config.max - entry.count,
-      resetTime: entry.resetTime,
+      success: count <= rule.max,
+      limit: rule.max,
+      remaining: Math.max(0, rule.max - count),
+      resetTime: resetAt.getTime(),
     };
-  }
-
-  public reset(identifier: string): void {
-    this.store.delete(identifier);
-  }
-
-  public shutdown(): void {
-    if (this.cleanupInterval) {
-      clearInterval(this.cleanupInterval);
-      this.cleanupInterval = null;
-    }
-    this.store.clear();
+  } catch (error) {
+    console.error("[RateLimiter] check failed, allowing request:", error);
+    return { success: true, limit: rule.max, remaining: rule.max, resetTime: Date.now() + rule.windowMs };
   }
 }
-
-// Pre-configured rate limiters
-export const aiRateLimiter = new RateLimiter({
-  windowMs: 60000, // 1 minute
-  max: 20,         // 20 requests per minute per user
-});
-
-export const apiRateLimiter = new RateLimiter({
-  windowMs: 60000, // 1 minute
-  max: 60,         // 60 requests per minute per user
-});
 
 /**
  * Validates an IP address format
@@ -121,34 +98,24 @@ function isValidIP(ip: string): boolean {
   return false;
 }
 
-/**
- * Helper to get client identifier (IP or user ID)
- * Sanitizes input to prevent header injection attacks and validates IP format
- */
-export function getClientIdentifier(request: Request): string {
-  // Check trusted edge headers first (Vercel, Cloudflare, standard proxy)
-  const rawIP = 
-    request.headers.get("x-vercel-forwarded-for")?.split(",")[0]?.trim() ||
-    request.headers.get("cf-connecting-ip")?.trim() ||
-    request.headers.get("x-real-ip")?.trim() ||
-    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || 
+/** Client IP from a plain header map (e.g. NextAuth's authorize `req.headers`). */
+export function clientIpFromHeaders(
+  headers: Record<string, string | string[] | undefined> | undefined
+): string {
+  const get = (name: string) => {
+    const v = headers?.[name];
+    return Array.isArray(v) ? v[0] : v;
+  };
+  const raw =
+    get("x-vercel-forwarded-for")?.split(",")[0]?.trim() ||
+    get("x-real-ip")?.trim() ||
+    get("x-forwarded-for")?.split(",")[0]?.trim() ||
     "unknown";
-  
-  // Sanitize to prevent header injection - only allow alphanumeric, dots, dashes, colons
-  const sanitized = rawIP.replace(/[^a-zA-Z0-9.\-:]/g, "");
-  
-  // Validate IP format - reject if not a valid IP address
-  if (sanitized !== "unknown" && !isValidIP(sanitized)) {
-    console.warn(`[RateLimiter] Invalid IP address format rejected: ${sanitized}`);
-    return "unknown";
-  }
-  
-  // Limit length to prevent abuse
-  return sanitized.slice(0, 45) || "unknown";
+  return isValidIP(raw) ? raw : "unknown";
 }
 
 // Rate limit response helper
-export function rateLimitResponse(result: { success: boolean; remaining: number; resetTime: number }) {
+export function rateLimitResponse(result: RateLimitResult) {
   if (!result.success) {
     return new Response(
       JSON.stringify({
@@ -158,14 +125,14 @@ export function rateLimitResponse(result: { success: boolean; remaining: number;
         status: 429,
         headers: {
           "Content-Type": "application/json",
-          "X-RateLimit-Limit": "20",
+          "X-RateLimit-Limit": String(result.limit),
           "X-RateLimit-Remaining": "0",
           "X-RateLimit-Reset": new Date(result.resetTime).toUTCString(),
-          "Retry-After": Math.ceil((result.resetTime - Date.now()) / 1000).toString(),
+          "Retry-After": Math.max(1, Math.ceil((result.resetTime - Date.now()) / 1000)).toString(),
         },
       }
     );
   }
-  
+
   return null;
 }
