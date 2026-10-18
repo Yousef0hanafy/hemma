@@ -18,8 +18,8 @@ export async function shouldUseAI(): Promise<boolean> {
     });
     const provider = setting?.value ?? "auto";
 
+    // "auto" (and the legacy "gemini" value) use OpenRouter when a key is set
     if (provider === "heuristic") return false;
-    if (provider === "gemini" || provider === "auto") return isAIAvailable();
     return isAIAvailable();
   } catch {
     return false;
@@ -233,7 +233,8 @@ export async function processAllUnprocessed(): Promise<{
   }
 
   for (const [sourceId, questionIds] of sourceGroups) {
-    await db.aIProcessingLog.create({
+    const start = Date.now();
+    const log = await db.aIProcessingLog.create({
       data: {
         sourceId,
         operation: "quality_check",
@@ -241,11 +242,25 @@ export async function processAllUnprocessed(): Promise<{
       },
     });
 
+    let sourceFailed = 0;
     for (const qId of questionIds) {
       const result = await processQuestion(qId, preferAI);
       if (result.status === "completed") completed++;
-      else failed++;
+      else {
+        failed++;
+        sourceFailed++;
+      }
     }
+
+    // Close the batch log (it was left "processing" forever before)
+    await db.aIProcessingLog.update({
+      where: { id: log.id },
+      data: {
+        status: sourceFailed === questionIds.length ? "failed" : "completed",
+        durationMs: Date.now() - start,
+        completedAt: new Date(),
+      },
+    });
   }
 
   return { total, completed, failed };

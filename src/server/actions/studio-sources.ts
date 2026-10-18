@@ -2,6 +2,7 @@
 
 import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/auth";
+import { failStuckSources } from "@/server/ingestion/stuck-sources";
 
 // ---------------------------------------------------------------------------
 // DTOs
@@ -46,6 +47,7 @@ export interface SourceDetail {
 
 export async function getSources(): Promise<SourceListItem[]> {
   await requirePermission("sources", "read");
+  await failStuckSources();
 
   const sources = await db.source.findMany({
     orderBy: { importedAt: "desc" },

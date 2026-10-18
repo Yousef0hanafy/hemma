@@ -29,7 +29,6 @@ export const STATIC_FREE_AI_MODELS = [
   "openai/gpt-oss-20b:free",
 ] as const;
 
-export const FREE_AI_MODELS = STATIC_FREE_AI_MODELS;
 
 let cachedDynamicFreeModels: string[] = [];
 let lastModelsFetchedAt = 0;
@@ -101,16 +100,49 @@ export async function getAvailableFreeModels(): Promise<string[]> {
   return [...STATIC_FREE_AI_MODELS];
 }
 
+/** Default model: OpenRouter's router across its free models. */
+const DEFAULT_MODEL = "openrouter/free";
+
+/**
+ * The model to try first. AI_MODEL must be an OpenRouter model id
+ * ("provider/model", e.g. "google/gemini-2.0-flash-exp:free").
+ */
 export function getAIModelName(): string {
-  const envModel = process.env.AI_MODEL;
-  if (envModel && envModel !== "auto" && (envModel.includes("/") || envModel.includes(":free"))) {
-    return envModel;
-  }
-  return "openrouter/free";
+  const envModel = process.env.AI_MODEL?.trim();
+  if (!envModel || envModel === "auto") return DEFAULT_MODEL;
+  if (envModel.includes("/")) return envModel;
+  console.warn(
+    `[OpenRouter] AI_MODEL="${envModel}" is not an OpenRouter model id (expected "provider/model"); using ${DEFAULT_MODEL}`
+  );
+  return DEFAULT_MODEL;
 }
 
+/**
+ * All AI calls go through OpenRouter, so only an OpenRouter key works.
+ * GOOGLE_API_KEY is accepted only if it actually holds an OpenRouter key
+ * (older setups put it there); a real Google key would just be rejected.
+ */
 export function getAIApiKey(): string {
-  return process.env.OPENROUTER_API_KEY || process.env.GOOGLE_API_KEY || "";
+  const key = process.env.OPENROUTER_API_KEY?.trim();
+  if (key) return key;
+  const legacy = process.env.GOOGLE_API_KEY?.trim();
+  return legacy?.startsWith("sk-or-") ? legacy : "";
+}
+
+/** How many models to try before giving up (each attempt is time-boxed). */
+const MAX_MODEL_ATTEMPTS = 4;
+/** Per-attempt limit for a full (non-streaming) completion. */
+const COMPLETION_TIMEOUT_MS = 45_000;
+/** Per-attempt limit for a stream to start (time to response headers). */
+const STREAM_CONNECT_TIMEOUT_MS = 20_000;
+/** Total budget for one non-streaming call across all attempts. */
+const CALL_DEADLINE_MS = 90_000;
+
+async function candidateModels(preferred?: string): Promise<string[]> {
+  const pool = await getAvailableFreeModels();
+  return Array.from(
+    new Set([preferred || getAIModelName(), ...pool, ...STATIC_FREE_AI_MODELS])
+  ).slice(0, MAX_MODEL_ATTEMPTS);
 }
 
 export function isAIAvailable(): boolean {
@@ -177,16 +209,11 @@ async function callOpenRouterWithFallback(
   const apiKey = getAIApiKey();
   if (!apiKey) return null;
 
-  const dynamicFreePool = await getAvailableFreeModels();
-  const candidateModels = Array.from(
-    new Set([
-      options?.preferredModel || getAIModelName(),
-      ...dynamicFreePool,
-      ...STATIC_FREE_AI_MODELS,
-    ])
-  );
+  const deadline = Date.now() + CALL_DEADLINE_MS;
 
-  for (const model of candidateModels) {
+  for (const model of await candidateModels(options?.preferredModel)) {
+    const remaining = deadline - Date.now();
+    if (remaining <= 1_000) break;
     try {
       const payload: Record<string, unknown> = {
         model,
@@ -208,6 +235,7 @@ async function callOpenRouterWithFallback(
           "Content-Type": "application/json",
         },
         body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(Math.min(COMPLETION_TIMEOUT_MS, remaining)),
       });
 
       if (!response.ok) {
@@ -226,7 +254,7 @@ async function callOpenRouterWithFallback(
     }
   }
 
-  console.error("[OpenRouter] All candidate free models failed to respond.");
+  console.error("[OpenRouter] All candidate models failed or timed out.");
   return null;
 }
 
@@ -246,16 +274,11 @@ async function streamOpenRouterWithFallback(
     throw new Error("لم يتم إعداد مفتاح OpenRouter.");
   }
 
-  const dynamicFreePool = await getAvailableFreeModels();
-  const candidateModels = Array.from(
-    new Set([
-      options?.preferredModel || getAIModelName(),
-      ...dynamicFreePool,
-      ...STATIC_FREE_AI_MODELS,
-    ])
-  );
-
-  for (const model of candidateModels) {
+  for (const model of await candidateModels(options?.preferredModel)) {
+    // Abort only if the stream doesn't START in time; once headers arrive the
+    // timer is cleared so long answers can keep streaming.
+    const connect = new AbortController();
+    const connectTimer = setTimeout(() => connect.abort(), STREAM_CONNECT_TIMEOUT_MS);
     try {
       const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
         method: "POST",
@@ -272,7 +295,9 @@ async function streamOpenRouterWithFallback(
           temperature: options?.temperature ?? 0.7,
           max_tokens: options?.maxTokens ?? 2048,
         }),
+        signal: connect.signal,
       });
+      clearTimeout(connectTimer);
 
       if (!response.ok || !response.body) {
         const errorText = await response.text();
@@ -323,6 +348,7 @@ async function streamOpenRouterWithFallback(
 
       return asyncIterable;
     } catch (e) {
+      clearTimeout(connectTimer);
       console.warn(`[OpenRouter Stream] Error connecting to ${model}:`, (e as Error).message);
     }
   }
@@ -393,9 +419,6 @@ export function getGeminiClient(): OpenRouterGeminiAdapter | null {
   return openRouterAdapterInstance;
 }
 
-export function getOpenRouterClient(): OpenRouterGeminiAdapter | null {
-  return getGeminiClient();
-}
 
 // -------------------------------------------------------------------
 // Schema Validation for AI Responses

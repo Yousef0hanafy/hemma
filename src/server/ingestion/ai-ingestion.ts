@@ -17,16 +17,25 @@ export const IngestedOptionSchema = z.object({
   text: z.string().min(1),
 });
 
-export const IngestedQuestionSchema = z.object({
-  stem: z.string().min(3),
-  options: z.array(IngestedOptionSchema).min(2).max(6),
-  correctKey: z.enum(["أ", "ب", "ج", "د"]),
-  explanation: z.string().optional().default(""),
-  studyTip: z.string().optional().default(""),
-  difficulty: z.enum(["easy", "medium", "hard"]).default("medium"),
-  categoryNameAr: z.string().min(2),
-  passageIndex: z.number().int().nonnegative().optional(),
-});
+export const IngestedQuestionSchema = z
+  .object({
+    stem: z.string().min(3),
+    options: z.array(IngestedOptionSchema).min(2).max(4),
+    correctKey: z.enum(["أ", "ب", "ج", "د"]),
+    explanation: z.string().optional().default(""),
+    studyTip: z.string().optional().default(""),
+    difficulty: z.enum(["easy", "medium", "hard"]).default("medium"),
+    categoryNameAr: z.string().min(2),
+    passageIndex: z.number().int().nonnegative().optional(),
+  })
+  .refine((q) => new Set(q.options.map((o) => o.key)).size === q.options.length, {
+    message: "مفاتيح الخيارات مكررة",
+    path: ["options"],
+  })
+  .refine((q) => q.options.some((o) => o.key === q.correctKey), {
+    message: "الإجابة الصحيحة ليست من ضمن الخيارات",
+    path: ["correctKey"],
+  });
 
 export const IngestedPassageSchema = z.object({
   titleAr: z.string().optional(),
@@ -48,9 +57,14 @@ export type IngestedResult = z.infer<typeof IngestedResultSchema>;
 // 2. Prompt Engineering for Multi-Mode Ingestion
 // ---------------------------------------------------------------------
 
+/** Max document characters sent to the model in one pass. */
+export const MAX_INGEST_CHARS = 35_000;
+
 export function buildIngestionPrompt(documentText: string, filename: string): string {
-  // Truncate document text if it exceeds reasonable single-pass prompt limit (approx 35k chars)
-  const safeText = documentText.slice(0, 35000);
+  // Truncate document text if it exceeds reasonable single-pass prompt limit
+  const safeText = documentText.slice(0, MAX_INGEST_CHARS);
+  // The filename is user-controlled: keep it to one short line without quotes
+  filename = filename.replace(/["\r\n<>]/g, " ").slice(0, 120);
 
   return `
 أنت نظام خبير في تحليل ومعالجة المناهج والمصادر التعليمية لاختبارات القدرات والمناهج المدرسية.
@@ -157,7 +171,7 @@ function extractJsonBlock(rawText: string): Record<string, unknown> | null {
 export async function processDocumentWithAI(
   documentText: string,
   filename: string
-): Promise<IngestedResult> {
+): Promise<IngestedResult & { warnings: string[] }> {
   const client = getGeminiClient();
   if (!client) {
     throw new Error("خدمة الذكاء الاصطناعي غير مفعلة أو لم يتم إعداد المفتاح.");
@@ -185,6 +199,24 @@ export async function processDocumentWithAI(
     throw new Error("فشل الذكاء الاصطناعي في إرجاع بنية JSON صالحة.");
   }
 
+  const warnings: string[] = [];
+  if (documentText.length > MAX_INGEST_CHARS) {
+    warnings.push(
+      `المستند طويل: تمت معالجة أول ${MAX_INGEST_CHARS.toLocaleString("ar-SA")} حرف فقط من ${documentText.length.toLocaleString("ar-SA")}. قسّم الملف لاستيراد الباقي.`
+    );
+  }
+
+  // Drop individual malformed questions instead of failing the whole import
+  const raw = jsonObject as { questions?: unknown };
+  if (Array.isArray(raw.questions)) {
+    const valid = raw.questions.filter((q) => IngestedQuestionSchema.safeParse(q).success);
+    const dropped = raw.questions.length - valid.length;
+    if (dropped > 0) {
+      warnings.push(`تم تجاهل ${dropped} سؤال غير صالح (خيارات ناقصة أو إجابة صحيحة غير موجودة في الخيارات).`);
+    }
+    raw.questions = valid;
+  }
+
   // Strict structural validation
   const validation = IngestedResultSchema.safeParse(jsonObject);
   if (!validation.success) {
@@ -193,7 +225,7 @@ export async function processDocumentWithAI(
     throw new Error(`فشل التحقق الهيكلي من مخرجات الذكاء الاصطناعي: ${errorDetails}`);
   }
 
-  return validation.data;
+  return { ...validation.data, warnings };
 }
 
 // ---------------------------------------------------------------------
@@ -213,6 +245,8 @@ export async function persistIngestedSource({
   insertedPassages: number;
   warnings: string[];
 }> {
+  // Sequential inserts per question: the 5s default would roll back
+  // medium/large imports.
   return await db.$transaction(async (tx) => {
     // 1. Update source title and metadata
     await tx.source.update({
@@ -308,5 +342,5 @@ export async function persistIngestedSource({
       insertedPassages: createdPassages.length,
       warnings,
     };
-  });
+  }, { timeout: 60_000, maxWait: 10_000 });
 }

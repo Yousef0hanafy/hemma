@@ -59,12 +59,16 @@ const cache = new Map<string, { data: unknown; ts: number }>();
 const TTL = 30_000; // 30s
 const subs = new Map<string, Set<() => void>>();
 
+// The signed-in user whose data the cache currently serves. Cache keys are
+// user-scoped, so prefetches must be stored under the same scope.
+let activeUserId = "guest";
+
 /**
  * Pre-populate the data cache so useServerData hooks find the data instantly
  * on the next render. Called on hover to make navigation feel instant.
  */
 export function setCacheValue(key: string, data: unknown): void {
-  cache.set(key, { data, ts: Date.now() });
+  cache.set(`${activeUserId}:${key}`, { data, ts: Date.now() });
 }
 
 function subscribe(key: string, cb: () => void) {
@@ -92,6 +96,9 @@ export function useServerData<T>(
   const { data: session } = useSession();
   const userId = (session?.user as any)?.id || "guest";
   const scopedKey = `${userId}:${key}`;
+  useEffect(() => {
+    activeUserId = userId;
+  }, [userId]);
 
   const [data, setData] = useState<T | null>(null);
   const [loading, setLoading] = useState(true);

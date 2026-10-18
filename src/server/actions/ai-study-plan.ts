@@ -3,7 +3,8 @@
 import { db } from "@/lib/db";
 import { getUserBucket } from "@/lib/auth-utils";
 import { requireAuth } from "@/lib/studio-auth";
-import { computeMastery } from "@/lib/engine/gamification";
+import { unstable_cache } from "next/cache";
+import { computeMastery, todayKey } from "@/lib/engine/gamification";
 import { generateAIStudyPlan } from "@/server/ai/study-plan-service";
 import { isAIAvailable } from "@/server/ai/evaluator";
 import { fetchStudyPlan as fetchHeuristicPlan } from "./study-plan";
@@ -91,11 +92,19 @@ export async function fetchAIStudyPlan(): Promise<AIStudyPlanResult | null> {
   if (isAIAvailable() && stats.totalAttempts > 0) {
     try {
       const input = await buildAIInput(stats, categoryData);
-      const plan = await generateAIStudyPlan(input);
-      if (plan) {
-        aiPlan = { ...plan, generatedAt: new Date().toISOString() };
-        aiUsed = true;
-      }
+      // One AI plan per user per Riyadh day (refreshed every 6h): the view is
+      // opened often, and regenerating each time burns the OpenRouter quota.
+      const cachedPlan = unstable_cache(
+        async () => {
+          const plan = await generateAIStudyPlan(input);
+          if (!plan) throw new Error("AI plan unavailable"); // errors aren't cached
+          return { ...plan, generatedAt: new Date().toISOString() };
+        },
+        ["ai-study-plan", userBucket, todayKey()],
+        { revalidate: 6 * 60 * 60 }
+      );
+      aiPlan = await cachedPlan();
+      aiUsed = true;
     } catch (err) {
       console.warn("[AIStudyPlan] Error generating AI plan, using heuristic:", err);
     }

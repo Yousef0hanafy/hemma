@@ -28,8 +28,7 @@ export const DEFAULT_SETTINGS: Record<string, string> = {
   auto_generate_explanations_on_import: "false",
   enable_ai_quality_check: "true",
   enable_ai_explanation: "false",
-  ai_provider: "auto",  // auto | gemini | heuristic
-  ai_model: "gemini-2.0-flash",
+  ai_provider: "auto",  // auto (OpenRouter, heuristic fallback) | heuristic
 
   // System
   site_name: "استوديو همة",

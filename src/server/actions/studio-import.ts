@@ -1,7 +1,10 @@
 "use server";
 
+import { after } from "next/server";
+
 import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/auth";
+import { failStuckSources } from "@/server/ingestion/stuck-sources";
 import { validateSource, normalizeQuestion } from "@/lib/content/normalize";
 import { processSource } from "@/server/ai/service";
 import {
@@ -209,7 +212,7 @@ export async function confirmImport(
       where: { key: "auto_process_on_import" },
     });
     if (setting?.value === "true") {
-      processSource(sourceRecord.id).catch(() => {});
+      after(() => processSource(sourceRecord.id).catch((e) => console.error("[StudioImport] processSource:", e)));
     }
   } catch {}
 
@@ -218,7 +221,7 @@ export async function confirmImport(
       where: { key: "auto_estimate_difficulty_on_import" },
     });
     if (setting?.value === "true" && inserted > 0) {
-      batchEstimateDifficultyForSource(sourceRecord.id).catch(() => {});
+      after(() => batchEstimateDifficultyForSource(sourceRecord.id).catch((e) => console.error("[StudioImport] difficulty:", e)));
     }
   } catch {}
 
@@ -227,7 +230,7 @@ export async function confirmImport(
       where: { key: "auto_generate_explanations_on_import" },
     });
     if (setting?.value === "true" && inserted > 0) {
-      batchGenerateExplanationsForSource(sourceRecord.id).catch(() => {});
+      after(() => batchGenerateExplanationsForSource(sourceRecord.id).catch((e) => console.error("[StudioImport] explanations:", e)));
     }
   } catch {}
 
@@ -246,6 +249,7 @@ export async function confirmImport(
 
 export async function getImportHistory(): Promise<ImportHistoryItem[]> {
   await requirePermission("import", "read");
+  await failStuckSources();
 
   const sources = await db.source.findMany({
     orderBy: { importedAt: "desc" },

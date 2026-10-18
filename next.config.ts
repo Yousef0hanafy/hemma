@@ -38,6 +38,9 @@ const nextConfig: NextConfig = {
   // Add your production domain here to prevent CORS errors
   experimental: {
     serverActions: {
+      // Imports upload files through a Server Action (default limit is 1 MB).
+      // Vercel caps function request bodies at 4.5 MB anyway.
+      bodySizeLimit: "4.5mb",
       allowedOrigins: process.env.NEXTAUTH_URL
         ? [new URL(process.env.NEXTAUTH_URL).host, "*.vercel.app", "localhost:3000"]
         : ["localhost:3000"],

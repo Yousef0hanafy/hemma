@@ -1,5 +1,7 @@
 "use server";
 
+import { after } from "next/server";
+
 // =====================================================================
 // Studio Ingest Server Actions — Unified Ingestion for PDF, DOCX, TXT, JSON
 // =====================================================================
@@ -206,7 +208,10 @@ export async function ingestSourceDocument(formData: FormData): Promise<IngestRe
           where: { key: "auto_process_on_import" },
         });
         if (autoSetting?.value === "true") {
-          processSource(sourceRecord.id).catch(() => {});
+          // after(): runs once the response is sent, and keeps the
+          // serverless function alive until it finishes (a bare promise is
+          // killed when the response returns, leaving jobs stuck).
+          after(() => processSource(sourceRecord.id).catch((e) => console.error("[StudioIngest] processSource:", e)));
         }
       } catch {}
 
@@ -217,7 +222,7 @@ export async function ingestSourceDocument(formData: FormData): Promise<IngestRe
         title: aiResult.documentTitle || initialTitle,
         insertedQuestions: persistResult.insertedQuestions,
         insertedPassages: persistResult.insertedPassages,
-        warnings: persistResult.warnings,
+        warnings: [...aiResult.warnings, ...persistResult.warnings],
       };
     } catch (processError) {
       // Mark source as failed if extraction or AI failed

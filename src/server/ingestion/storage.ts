@@ -6,17 +6,18 @@ import fs from "fs/promises";
 import path from "path";
 import os from "os";
 
-export const MAX_FILE_SIZE_BYTES = 15 * 1024 * 1024; // 15MB
+import { ALLOWED_UPLOAD_EXTENSIONS, MAX_UPLOAD_BYTES } from "@/lib/content/upload-limits";
+
+export const MAX_FILE_SIZE_BYTES = MAX_UPLOAD_BYTES;
 
 export const ALLOWED_MIME_TYPES: Record<string, string[]> = {
   "application/pdf": [".pdf"],
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document": [".docx"],
-  "application/msword": [".doc"],
   "text/plain": [".txt", ".md"],
   "application/json": [".json"],
 };
 
-export const ALLOWED_EXTENSIONS = [".pdf", ".docx", ".doc", ".txt", ".md", ".json"];
+export const ALLOWED_EXTENSIONS = ALLOWED_UPLOAD_EXTENSIONS;
 
 export interface StoredFileInfo {
   originalFilename: string;

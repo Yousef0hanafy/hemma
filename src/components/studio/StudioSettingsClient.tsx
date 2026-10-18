@@ -175,19 +175,12 @@ const SETTING_GROUPS: {
       {
         key: "ai_provider",
         label: "مزود الذكاء الاصطناعي",
-        description: "المحرك المستخدم لتقييم الجودة — يتطلب مفتاح API في المتغيرات البيئية",
+        description: "الذكاء الاصطناعي يعمل عبر OpenRouter (المفتاح OPENROUTER_API_KEY والنموذج AI_MODEL في متغيرات البيئة)",
         type: "select",
         options: [
-          { value: "auto", label: "تلقائي (Gemini ↔ تقييم محلي)" },
-          { value: "gemini", label: "Google Gemini فقط" },
-          { value: "heuristic", label: "تقييم محلي فقط" },
+          { value: "auto", label: "OpenRouter (مع الرجوع للتقييم المحلي عند التعذّر)" },
+          { value: "heuristic", label: "تقييم محلي فقط (بدون ذكاء اصطناعي)" },
         ],
-      },
-      {
-        key: "ai_model",
-        label: "نموذج الذكاء الاصطناعي",
-        description: "اسم النموذج المستخدم (مثل gemini-2.0-flash, gemini-2.5-pro) — يتطلب مفتاح API",
-        type: "text",
       },
     ],
   },

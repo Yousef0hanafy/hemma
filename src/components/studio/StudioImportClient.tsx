@@ -37,6 +37,11 @@ import {
 } from "@/server/actions/studio-ingest";
 import { getImportHistory } from "@/server/actions/studio-import";
 import { ImportAiStatus } from "@/components/studio/StudioImportAiStatus";
+import {
+  ALLOWED_UPLOAD_EXTENSIONS,
+  MAX_UPLOAD_BYTES,
+  MAX_UPLOAD_LABEL_AR,
+} from "@/lib/content/upload-limits";
 
 // ---------------------------------------------------------------------------
 // Helpers & Badges
@@ -156,7 +161,7 @@ function UniversalDropZone({
         <input
           ref={fileInputRef}
           type="file"
-          accept=".pdf,.docx,.doc,.txt,.md,.json"
+          accept={ALLOWED_UPLOAD_EXTENSIONS.join(",")}
           className="hidden"
           disabled={isProcessing}
           onChange={handleInputChange}
@@ -206,7 +211,7 @@ function UniversalDropZone({
         </div>
 
         <div className="text-[11px] text-muted-foreground/70">
-          الحد الأقصى لحجم الملف: ١٥ ميجابايت
+          الحد الأقصى لحجم الملف: {MAX_UPLOAD_LABEL_AR}
         </div>
       </div>
 
@@ -368,6 +373,13 @@ export function StudioImportClient() {
 
   const handleFileSelect = useCallback(
     (file: File) => {
+      // Check before uploading: an oversized body is rejected by the platform
+      // with a generic error before our server code ever runs.
+      if (file.size > MAX_UPLOAD_BYTES) {
+        setError(`حجم الملف أكبر من الحد المسموح (${MAX_UPLOAD_LABEL_AR}). قسّم الملف أو ضع النص كـ JSON.`);
+        setStep("error");
+        return;
+      }
       setError(null);
       ingestMutation.mutate(file);
     },

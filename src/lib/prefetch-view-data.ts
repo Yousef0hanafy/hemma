@@ -81,9 +81,7 @@ const VIEW_PREFETCH_MAP: Record<
     { key: "extended-profile", fetcher: () => import("@/server/actions/student-profile").then((m) => m.fetchExtendedProfile()) },
     { key: "learning-goals", fetcher: () => import("@/server/actions/learning-goals").then((m) => m.fetchLearningGoals()) },
   ],
-  study_plan: [
-    { key: "ai-study-plan", fetcher: () => import("@/server/actions/ai-study-plan").then((m) => m.fetchAIStudyPlan()) },
-  ],
+  // study_plan is deliberately not prefetched: it may call the AI model.
 };
 
 /**
