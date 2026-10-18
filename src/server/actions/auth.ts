@@ -10,7 +10,7 @@ import { z } from "zod";
 
 const signupSchema = z.object({
   name: z.string().min(2, "الاسم يجب أن يكون حرفين على الأقل").max(50),
-  email: z.string().email("البريد الإلكتروني غير صالح"),
+  email: z.string().trim().toLowerCase().email("البريد الإلكتروني غير صالح"),
   password: z
     .string()
     .min(6, "كلمة المرور يجب أن تكون ٦ أحرف على الأقل")
@@ -49,7 +49,10 @@ export async function signupWithEmail(
     const { name, email, password } = parsed.data;
 
     // Check if email already exists
-    const existing = await db.user.findUnique({ where: { email } });
+    // Case-insensitive: older rows may have been stored with mixed case
+    const existing = await db.user.findFirst({
+      where: { email: { equals: email, mode: "insensitive" } },
+    });
     if (existing) {
       // If the user has a password, they're already registered with credentials
       if (existing.password) {

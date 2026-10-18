@@ -125,6 +125,10 @@ export function hasPermission(
 
 // ── Auth Configuration ──────────────────────────────────────────
 
+// bcrypt hash (cost 12) of a random throwaway string — compared against when
+// no user matches, to equalise login timing.
+const DUMMY_PASSWORD_HASH = "$2b$12$75zbw3fAPjqqbBNzoj8BkO5U9mDnsfKjTi6EkJChda57jgrtRBQhG";
+
 function buildProviders() {
   const providers: AuthOptions["providers"] = [];
 
@@ -153,16 +157,19 @@ function buildProviders() {
           return null;
         }
 
-        const user = await db.user.findUnique({
-          where: { email: credentials.email },
+        const user = await db.user.findFirst({
+          where: { email: { equals: credentials.email.trim(), mode: "insensitive" } },
         });
+
+        // Always run one bcrypt compare so response time doesn't reveal
+        // whether the email is registered.
+        const hash = user?.password ?? DUMMY_PASSWORD_HASH;
+        const isValid = await bcrypt.compare(credentials.password, hash);
 
         // User must exist and have a password (i.e., signed up via credentials)
         if (!user || !user.password) {
           return null;
         }
-
-        const isValid = await bcrypt.compare(credentials.password, user.password);
         if (!isValid) {
           return null;
         }

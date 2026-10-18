@@ -5,6 +5,18 @@
 
 import { NextRequest, NextResponse } from "next/server";
 
+function parseDsn(dsn: string | undefined): { host: string; projectId: string } | null {
+  if (!dsn) return null;
+  try {
+    const url = new URL(dsn);
+    const projectId = url.pathname.split("/").filter(Boolean).pop();
+    if (url.protocol !== "https:" || !projectId || !/^\d+$/.test(projectId)) return null;
+    return { host: url.host, projectId };
+  } catch {
+    return null;
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const envelope = await request.text();
@@ -22,10 +34,19 @@ export async function POST(request: NextRequest) {
       return new NextResponse("Invalid envelope", { status: 400 });
     }
 
-    // Extract the project ID from the DSN
-    const dsnParts = dsn.split("/");
-    const projectId = dsnParts[dsnParts.length - 1];
-    const sentryHost = new URL(dsn).host;
+    // Only forward to OUR Sentry project — otherwise this route is an open
+    // relay that lets anyone make the server POST to arbitrary hosts.
+    const allowed = parseDsn(process.env.NEXT_PUBLIC_SENTRY_DSN ?? process.env.SENTRY_DSN);
+    const requested = parseDsn(dsn);
+    if (
+      !allowed ||
+      !requested ||
+      requested.host !== allowed.host ||
+      requested.projectId !== allowed.projectId
+    ) {
+      return new NextResponse("Unknown DSN", { status: 400 });
+    }
+    const { host: sentryHost, projectId } = allowed;
 
     // Forward the envelope to Sentry
     const response = await fetch(

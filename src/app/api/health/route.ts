@@ -12,10 +12,9 @@ export async function GET() {
       latency: Date.now() - start,
     };
   } catch (error) {
-    checks.database = {
-      status: "error",
-      error: error instanceof Error ? error.message : "Unknown error",
-    };
+    // Log the details server-side; the public response must not leak them
+    console.error("[health] database check failed:", error);
+    checks.database = { status: "error" };
   }
 
   // Overall status

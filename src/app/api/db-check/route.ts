@@ -7,12 +7,20 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { createHash, timingSafeEqual } from "crypto";
+
+/** Constant-time string comparison (hash first so lengths always match). */
+function safeEqual(a: string, b: string): boolean {
+  const ha = createHash("sha256").update(a).digest();
+  const hb = createHash("sha256").update(b).digest();
+  return timingSafeEqual(ha, hb);
+}
 
 export async function GET(request: Request) {
   // Gate 1: Accept a shared secret from env for CI/ops tooling
   const secret = process.env.DB_CHECK_SECRET;
   const headerSecret = request.headers.get("x-db-check-secret");
-  if (secret && headerSecret === secret) {
+  if (secret && headerSecret && safeEqual(headerSecret, secret)) {
     return runCheck();
   }
 

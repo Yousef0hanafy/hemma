@@ -6,11 +6,16 @@
 //   - Google Fonts:                              CacheFirst
 //   - Static media / icons / manifest:           CacheFirst
 //   - Navigation (page HTML):                    NetworkFirst → shell fallback
-//   - Server Action POST responses (data):       NetworkFirst → cache fallback
+//   - POST (Server Actions) and /api/*:          network only — never cached:
+//     responses are per-user data, and replaying a cached mutation response
+//     offline would report a write that never happened.
+//   - /studio pages:                             network only
 //   - Everything else:                           NetworkFirst → cache fallback
 // =====================================================================
 
-const CACHE_NAME = "hemma-cache-v1";
+// v2: v1 cached Server Action responses (per-user data); bumping the name
+// makes the activate handler delete those caches.
+const CACHE_NAME = "hemma-cache-v2";
 const PRECACHE_URLS = [
   "/",
   "/manifest.webmanifest",
@@ -18,19 +23,6 @@ const PRECACHE_URLS = [
 
 // Response types eligible for caching.
 const CACHEABLE_TYPES = new Set(["basic", "cors"]);
-
-// ── Helpers ──────────────────────────────────────────────────────────────
-
-/** Simple string hash for creating cache keys from POST bodies. */
-function hashStr(str) {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    const char = str.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
-    hash = hash & hash;
-  }
-  return Math.abs(hash).toString(36);
-}
 
 // ── Install ──────────────────────────────────────────────────────────────
 self.addEventListener("install", (event) => {
@@ -121,6 +113,15 @@ self.addEventListener("fetch", (event) => {
   // Only cache http(s) requests
   if (!url.protocol.startsWith("http")) return;
 
+  // ── Never cache user data: Server Actions, API routes, auth, studio ──
+  if (
+    request.method !== "GET" ||
+    (url.origin === self.location.origin &&
+      (url.pathname.startsWith("/api/") || url.pathname.startsWith("/studio")))
+  ) {
+    return; // let the browser handle it normally
+  }
+
   // ── Next.js build assets (hashed filenames → immutable) ──
   if (url.pathname.startsWith("/_next/static/")) {
     event.respondWith(cacheFirst(request));
@@ -145,14 +146,6 @@ self.addEventListener("fetch", (event) => {
   // ── Navigation (page shell) ──
   if (request.mode === "navigate") {
     event.respondWith(networkFirstWithShellFallback(request));
-    return;
-  }
-
-  // ── Server Action POST responses (question data, profile, etc.) ──
-  // These are the data-fetching endpoints the app relies on.
-  // Cache by URL + body hash so identical requests can be served when offline.
-  if (request.method === "POST") {
-    event.respondWith(cachedPostRequest(request));
     return;
   }
 
@@ -209,44 +202,3 @@ async function networkFirstWithShellFallback(request) {
   }
 }
 
-// ── Cached POST Request (Server Actions) ─────────────────────────────────
-// Build a cache key from URL + body hash so the same server action
-// (with same parameters) can be replayed from cache when offline.
-async function cachedPostRequest(request) {
-  // Clone so we can read the body
-  const reqClone = request.clone();
-  let bodyText = "";
-  try {
-    bodyText = await reqClone.text();
-  } catch {
-    bodyText = "";
-  }
-
-  // Build a valid cache URL: original URL + __body hash param
-  const bodyHash = hashStr(bodyText);
-  const separator = request.url.includes("?") ? "&" : "?";
-  const cacheUrl = request.url + separator + "__body=" + bodyHash;
-  const cacheReq = new Request(cacheUrl);
-
-  try {
-    const response = await fetch(request.clone());
-    if (response.ok && CACHEABLE_TYPES.has(response.type)) {
-      const cache = await caches.open(CACHE_NAME);
-      cache.put(cacheReq, response.clone());
-    }
-    return response;
-  } catch {
-    // Offline — try to serve from cache
-    const cache = await caches.open(CACHE_NAME);
-    const cached = await cache.match(cacheReq);
-    if (cached) return cached;
-    // Return a 503 JSON error so the app can handle it gracefully
-    return new Response(
-      JSON.stringify({ error: "offline" }),
-      {
-        status: 503,
-        headers: { "Content-Type": "application/json" },
-      }
-    );
-  }
-}
