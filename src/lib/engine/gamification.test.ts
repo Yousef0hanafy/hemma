@@ -302,13 +302,21 @@ describe("updateStreak", () => {
     expect(result.shieldEarned).toBe(false);
   });
 
-  it("consumes a shield if gap detected and shields > 0", () => {
-    const oldDate = "2026-07-10";
-    const result = updateStreak(5, oldDate, 2, refDate);
-    expect(result.streak).toBe(5);
+  it("consumes one shield per missed day and keeps the streak going", () => {
+    // Last active Jul 13, today Jul 15 → missed Jul 14 only
+    const result = updateStreak(5, "2026-07-13", 2, refDate);
+    expect(result.streak).toBe(6);
     expect(result.shields).toBe(1);
     expect(result.shieldConsumed).toBe(true);
     expect(result.shieldEarned).toBe(false);
+  });
+
+  it("resets when missed days exceed the shields (keeping the shields)", () => {
+    // Jul 10 → Jul 15: four missed days, only two shields
+    const result = updateStreak(5, "2026-07-10", 2, refDate);
+    expect(result.streak).toBe(1);
+    expect(result.shields).toBe(2);
+    expect(result.shieldConsumed).toBe(false);
   });
 
   it("resets streak to 1 if gap detected and no shields", () => {

@@ -19,6 +19,7 @@ export async function fetchCategories() {
   const cats = await db.category.findMany({ orderBy: { displayOrder: "asc" } });
   const counts = await db.question.groupBy({
     by: ["categoryId"],
+    where: { status: "published" },
     _count: { id: true },
   });
   const countMap = new Map<string, number>();
@@ -37,23 +38,62 @@ export interface QuestionFilter {
   limit?: number;
 }
 
+const MAX_QUESTIONS_PER_FETCH = 200;
+
+/** Fisher–Yates shuffle (in place). */
+function shuffleInPlace<T>(arr: T[]): T[] {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
 export async function fetchQuestions(filter: QuestionFilter = {}) {
-  await requirePermission("question", "read");
-  const questions = await db.question.findMany({
-    where: {
-      ...(filter.categorySlug && { category: { slug: filter.categorySlug } }),
-      ...(filter.sourceSlug && { source: { slug: filter.sourceSlug } }),
-      ...(filter.difficulty && { difficulty: filter.difficulty }),
-      ...(filter.search && { stem: { contains: filter.search } }),
-      ...(filter.hasPassage !== undefined && {
-        passageId: filter.hasPassage ? { not: null } : null,
-      }),
-    },
-    include: { category: true, source: true, passage: true },
-    take: filter.limit ?? 200,
-    orderBy: { sourceLocalId: "asc" },
-  });
-  return questions.map(toQuestionDTO);
+  const userId = await requirePermission("question", "read");
+  const limit = Math.min(
+    MAX_QUESTIONS_PER_FETCH,
+    Math.max(1, Math.floor(Number(filter.limit) || MAX_QUESTIONS_PER_FETCH))
+  );
+  const where = {
+    // Students only ever see published questions (imports land in "review")
+    status: "published",
+    ...(filter.categorySlug && { category: { slug: filter.categorySlug } }),
+    ...(filter.sourceSlug && { source: { slug: filter.sourceSlug } }),
+    ...(filter.difficulty && { difficulty: filter.difficulty }),
+    ...(filter.search && { stem: { contains: filter.search.slice(0, 200) } }),
+    ...(filter.hasPassage !== undefined && {
+      passageId: filter.hasPassage ? { not: null } : null,
+    }),
+  };
+  const include = { category: true, source: true, passage: true } as const;
+
+  // Search results keep a stable order
+  if (filter.search) {
+    const questions = await db.question.findMany({
+      where,
+      include,
+      take: limit,
+      orderBy: { sourceLocalId: "asc" },
+    });
+    return questions.map(toQuestionDTO);
+  }
+
+  // Practice pools: sample across the WHOLE matching bank (it used to be the
+  // first 200 by source order forever), questions the student hasn't
+  // attempted first, each group shuffled.
+  const [candidates, attempted] = await Promise.all([
+    db.question.findMany({ where, select: { id: true } }),
+    db.attempt.findMany({
+      where: { userBucket: userId },
+      distinct: ["questionId"],
+      select: { questionId: true },
+    }),
+  ]);
+  const seen = new Set(attempted.map((a) => a.questionId));
+  const unseenIds = shuffleInPlace(candidates.filter((q) => !seen.has(q.id)).map((q) => q.id));
+  const seenIds = shuffleInPlace(candidates.filter((q) => seen.has(q.id)).map((q) => q.id));
+  return loadQuestionsByIds([...unseenIds, ...seenIds].slice(0, limit));
 }
 
 export async function fetchQuestionById(id: string) {
@@ -69,13 +109,11 @@ export async function fetchQuestionById(id: string) {
   return toQuestionDTO(q);
 }
 
-const MAX_IDS_PER_FETCH = 200;
-
 async function loadQuestionsByIds(ids: string[]): Promise<QuestionDTO[]> {
   if (!Array.isArray(ids) || ids.length === 0) {
     return [];
   }
-  const wanted = ids.filter((id) => typeof id === "string").slice(0, MAX_IDS_PER_FETCH);
+  const wanted = ids.filter((id) => typeof id === "string").slice(0, MAX_QUESTIONS_PER_FETCH);
   const qs = await db.question.findMany({
     where: { id: { in: wanted } },
     include: { category: true, source: true, passage: true },

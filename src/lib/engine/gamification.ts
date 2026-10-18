@@ -130,12 +130,20 @@ function addDaysToKey(dayKey: string, days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
+/** Whole days from one "YYYY-MM-DD" key to another. */
+function daysBetweenKeys(from: string, to: string): number {
+  return Math.round(
+    (Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / DAY_MS
+  );
+}
+
 /**
  * Compute the new streak given the previous streak + lastActiveDate.
  * - If lastActiveDate is today: no change.
  * - If lastActiveDate is yesterday: +1.
- * - If lastActiveDate is older and shields > 0: shield consumed (no change).
- * - Otherwise: streak resets to 1 (today's activity counts).
+ * - If days were missed: each missed day costs one shield. With enough
+ *   shields the streak survives (and today counts, +1); otherwise it
+ *   resets to 1 and the shields are kept.
  */
 export function updateStreak(
   prevStreak: number,
@@ -147,19 +155,31 @@ export function updateStreak(
   if (prevLastActive === today) {
     return { streak: prevStreak, shields, shieldConsumed: false, shieldEarned: false };
   }
-  const yesterday = dayKeyOffset(1, now);
-  if (prevLastActive === yesterday) {
-    const newStreak = prevStreak + 1;
-    // Earn a shield every 7-day streak milestone (7, 14, 21, …)
-    const shieldEarned = newStreak % 7 === 0 && prevStreak % 7 !== 0;
-    const newShields = shields + (shieldEarned ? 1 : 0);
-    return { streak: newStreak, shields: newShields, shieldConsumed: false, shieldEarned };
+
+  const gap = prevLastActive ? daysBetweenKeys(prevLastActive, today) : Infinity;
+  const missedDays = gap - 1;
+  let streak: number;
+  let remainingShields = shields;
+  let shieldConsumed = false;
+
+  if (missedDays === 0) {
+    streak = prevStreak + 1;
+  } else if (prevStreak > 0 && Number.isFinite(missedDays) && missedDays > 0 && shields >= missedDays) {
+    streak = prevStreak + 1;
+    remainingShields = shields - missedDays;
+    shieldConsumed = true;
+  } else {
+    return { streak: 1, shields, shieldConsumed: false, shieldEarned: false };
   }
-  // Gap detected
-  if (shields > 0 && prevStreak > 0) {
-    return { streak: prevStreak, shields: shields - 1, shieldConsumed: true, shieldEarned: false };
-  }
-  return { streak: 1, shields, shieldConsumed: false, shieldEarned: false };
+
+  // Earn a shield every 7-day streak milestone (7, 14, 21, …)
+  const shieldEarned = streak % 7 === 0;
+  return {
+    streak,
+    shields: remainingShields + (shieldEarned ? 1 : 0),
+    shieldConsumed,
+    shieldEarned,
+  };
 }
 
 // ---------------------------------------------------------------------------

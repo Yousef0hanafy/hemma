@@ -340,14 +340,20 @@ export function useFinalizeExam() {
       sessionId: string,
       questionIds: string[],
       selections: Record<string, string | null>,
-      actualDurationSec?: number
+      actualDurationSec?: number,
+      timings?: Record<string, number>
     ) => {
       const result = await finalizeExamSession(
         sessionId,
         questionIds,
         selections,
-        actualDurationSec
+        actualDurationSec,
+        timings
       );
+      invalidate(`${userId}:due-reviews`);
+      invalidate(`${userId}:due-review-count`);
+      invalidate(`${userId}:recent-attempts`);
+      invalidate(`${userId}:exam-history`);
       invalidate(`${userId}:profile`);
       invalidate(`${userId}:daily`);
       invalidate(`${userId}:daily-quest`);

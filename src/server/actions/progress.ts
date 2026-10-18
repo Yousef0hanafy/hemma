@@ -21,6 +21,8 @@ import {
   xpForExamSession,
 } from "@/lib/engine/gamification";
 import type { Difficulty } from "@/lib/content/dto";
+import { ACHIEVEMENTS } from "@/lib/engine/achievements";
+import { evaluateAchievements } from "@/server/achievements";
 
 const ANSWER_KEYS = ["أ", "ب", "ج", "د"] as const;
 type AnswerKey = (typeof ANSWER_KEYS)[number];
@@ -180,6 +182,9 @@ export async function recordAttempt(input: RecordAttemptInput) {
   });
 
   const { newLevel, leveledUp, shieldEarned } = await awardXp(userId, xpEarned);
+  const unlockedAchievements = await evaluateAchievements(userId, {
+    attempt: { isCorrect, timeMs: attempt.timeMs },
+  });
 
   return {
     attemptId: attempt.id,
@@ -187,7 +192,7 @@ export async function recordAttempt(input: RecordAttemptInput) {
     xpEarned,
     leveledUp,
     newLevel,
-    unlockedAchievements: [] as string[],
+    unlockedAchievements,
     shieldEarned,
     xpMilestonesHit: [] as Array<{ xp: number; label: string }>,
     streakMilestoneHit: undefined as { streak: number; label: string } | undefined,
@@ -271,7 +276,8 @@ export async function submitSrsReview(questionId: string, quality: SrsQuality) {
     });
   }
 
-  return { success: true };
+  const unlockedAchievements = await evaluateAchievements(userId);
+  return { success: true, unlockedAchievements };
 }
 
 export async function autoRegisterMistake(questionId: string) {
@@ -309,7 +315,9 @@ export async function finalizeExamSession(
   sessionId: string,
   questionIds: string[],
   selections: Record<string, string | null>,
-  actualDurationSec?: number
+  actualDurationSec?: number,
+  /** Time spent per question (ms), measured on the client */
+  timings?: Record<string, number>
 ) {
   const userId = await requirePermission("attempt", "create");
 
@@ -339,25 +347,52 @@ export async function finalizeExamSession(
   const existing = await db.examSessionData.findUnique({ where: { sessionId } });
   if (existing) {
     if (existing.userBucket !== userId) throw new Error("غير مصرح به");
-    return { success: true, xpEarned: 0 };
+    return { success: true, xpEarned: 0, unlockedAchievements: [] };
   }
 
   // Grade on the server from the stored answer keys
   const questions = await db.question.findMany({
     where: { id: { in: questionIds } },
-    select: { id: true, correctKey: true },
+    select: { id: true, correctKey: true, difficulty: true },
   });
   const answered = questionIds.filter((id) => cleanSelections[id] !== null).length;
   const correct = questions.filter((q) => cleanSelections[q.id] === q.correctKey).length;
   const scorePercent = (correct / questionIds.length) * 100;
+  const today = todayKey();
+
+  // One attempt per answered question, using the FINAL answer (recording the
+  // first tap meant changed answers never counted). Same XP rule as
+  // recordAttempt: only for the first attempt at a question each day.
+  const answeredQuestions = questions.filter((q) => cleanSelections[q.id] !== null);
+  const seenToday = new Set(
+    (
+      await db.attempt.findMany({
+        where: {
+          userBucket: userId,
+          questionId: { in: answeredQuestions.map((q) => q.id) },
+          createdAt: { gte: dayStart(today) },
+        },
+        select: { questionId: true },
+      })
+    ).map((a) => a.questionId)
+  );
+  let answersXp = 0;
+  const graded = answeredQuestions.map((q) => {
+    const isCorrect = cleanSelections[q.id] === q.correctKey;
+    if (!seenToday.has(q.id)) {
+      answersXp += isCorrect ? xpForCorrect(q.difficulty as Difficulty, "exam") : XP_FOR_EFFORT;
+    }
+    return { q, isCorrect };
+  });
 
   const examsToday = await db.examSessionData.count({
-    where: { userBucket: userId, createdAt: { gte: dayStart(todayKey()) } },
+    where: { userBucket: userId, createdAt: { gte: dayStart(today) } },
   });
-  const xpEarned =
+  const bonusXp =
     answered >= EXAM_BONUS_MIN_ANSWERED && examsToday < EXAM_BONUS_MAX_PER_DAY
       ? xpForExamSession(scorePercent)
       : 0;
+  const xpEarned = answersXp + bonusXp;
 
   const durationSec = clampInt(actualDurationSec, 0, 24 * 60 * 60);
   await db.examSessionData.create({
@@ -371,16 +406,54 @@ export async function finalizeExamSession(
     },
   });
 
-  if (xpEarned > 0) {
-    await db.dailyActivity.upsert({
-      where: { userBucket_date: { userBucket: userId, date: todayKey() } },
-      create: { userBucket: userId, date: todayKey(), xpEarned },
-      update: { xpEarned: { increment: xpEarned } },
+  if (graded.length > 0) {
+    await db.attempt.createMany({
+      data: graded.map(({ q, isCorrect }) => ({
+        userBucket: userId,
+        questionId: q.id,
+        selectedKey: cleanSelections[q.id],
+        isCorrect,
+        mode: "exam",
+        sessionId,
+        timeMs: clampInt(timings?.[q.id], 0, 60 * 60 * 1000),
+      })),
     });
-    await awardXp(userId, xpEarned);
+    // Wrong answers go into the SRS review queue (in an hour)
+    const wrong = graded.filter((g) => !g.isCorrect);
+    if (wrong.length > 0) {
+      await db.reviewSchedule.createMany({
+        data: wrong.map(({ q }) => ({
+          userBucket: userId,
+          questionId: q.id,
+          easiness: 2.5,
+          interval: 1,
+          repetitions: 0,
+          nextReviewAt: new Date(Date.now() + 60 * 60 * 1000),
+        })),
+        skipDuplicates: true,
+      });
+    }
   }
 
-  return { success: true, xpEarned };
+  await db.dailyActivity.upsert({
+    where: { userBucket_date: { userBucket: userId, date: today } },
+    create: {
+      userBucket: userId,
+      date: today,
+      attempts: graded.length,
+      correct,
+      xpEarned,
+    },
+    update: {
+      attempts: { increment: graded.length },
+      correct: { increment: correct },
+      xpEarned: { increment: xpEarned },
+    },
+  });
+  await awardXp(userId, xpEarned);
+  const unlockedAchievements = await evaluateAchievements(userId, { examScorePercent: scorePercent });
+
+  return { success: true, xpEarned, unlockedAchievements };
 }
 
 // ── Data Fetching Functions ─────────────────────────────────────
@@ -420,7 +493,7 @@ export async function fetchUserProfile() {
 
 export async function fetchAchievements() {
   await requirePermission("achievement", "read");
-  return await db.achievement.findMany();
+  return ACHIEVEMENTS;
 }
 
 export async function fetchCategoryMastery() {

@@ -16,9 +16,7 @@ import {
 import { useViewStore } from "@/lib/store/view-store";
 import {
   useExamQuestionsByIds,
-  useRecordAttempt,
   useFinalizeExam,
-  useAutoRegisterMistake,
 } from "@/lib/hooks/use-data";
 import { categoryMeta, toArabicDigits, formatDuration, DIFFICULTY_META } from "@/lib/content/ui-helpers";
 import { cn } from "@/lib/utils";
@@ -52,9 +50,7 @@ export function ExamRunnerView({
 }) {
   const { setView } = useViewStore();
   const { data: questions } = useExamQuestionsByIds(questionIds);
-  const recordAttempt = useRecordAttempt();
   const finalizeExam = useFinalizeExam();
-  const autoRegisterMistake = useAutoRegisterMistake();
 
   // Restore persisted state for this session if available (e.g. after session expiry)
   const [savedInternal] = useState(() => loadPendingExamFor(sessionId));
@@ -65,7 +61,13 @@ export function ExamRunnerView({
     savedInternal?.selections as Record<string, ArabicLetter | null> ?? {}
   );
   const questionStartTimesRef = useRef<Record<string, number>>({});
+  // Time from first seeing a question to its first answer (sent on submit)
+  const questionTimesRef = useRef<Record<string, number>>({});
   const [timeLeft, setTimeLeft] = useState(savedInternal?.timeLeft ?? durationSec);
+  // Wall-clock deadline: browsers throttle timers in background tabs, so
+  // counting ticks would give extra time. (Resumed exams continue from the
+  // saved remaining time.)
+  const [deadline] = useState(() => Date.now() + (savedInternal?.timeLeft ?? durationSec) * 1000);
   const [showSubmitDialog, setShowSubmitDialog] = useState(false);
   const [showNavGrid, setShowNavGrid] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -93,7 +95,13 @@ export function ExamRunnerView({
         finalSelections[q.id] = selections[q.id] ?? null;
       }
       const actualDurationSec = Math.floor((Date.now() - examStartTime) / 1000);
-      const { xpEarned } = await finalizeExam(sessionId, questionIds, finalSelections, actualDurationSec);
+      const { xpEarned } = await finalizeExam(
+        sessionId,
+        questionIds,
+        finalSelections,
+        actualDurationSec,
+        questionTimesRef.current
+      );
       clearPendingExam();
       setView({
         kind: "exam_report",
@@ -114,16 +122,13 @@ export function ExamRunnerView({
   // Timer countdown
   useEffect(() => {
     if (durationSec === 0 || submitting) return; // no time limit / already submitting
-    const id = setTimeout(() => {
-      if (timeLeft <= 1) {
-        setTimeLeft(0);
-        handleSubmit();
-      } else {
-        setTimeLeft(timeLeft - 1);
-      }
+    const id = setInterval(() => {
+      const remaining = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
+      setTimeLeft(remaining);
+      if (remaining === 0) handleSubmit();
     }, 1000);
-    return () => clearTimeout(id);
-  }, [timeLeft, durationSec, submitting, handleSubmit]);
+    return () => clearInterval(id);
+  }, [deadline, durationSec, submitting, handleSubmit]);
 
   // Track question start time via ref (no re-render needed)
   useEffect(() => {
@@ -133,37 +138,17 @@ export function ExamRunnerView({
   }, [current]);
 
   const selectAnswer = useCallback(
-    async (key: ArabicLetter) => {
+    (key: ArabicLetter) => {
       if (!current) return;
-      const prevSelection = selections[current.id] ?? null;
-
-      // If changing answer, we don't re-record — we just update local state
-      // (We'll record all attempts on submit)
-      setSelections((prev) => ({ ...prev, [current.id]: key }));
-
-      // If first selection for this question, record the attempt silently
-      // (so we get attempt history for analytics)
-      if (!prevSelection) {
-        const timeMs = Date.now() - (questionStartTimesRef.current[current.id] ?? Date.now());
-        try {
-          const { isCorrect } = await recordAttempt({
-            questionId: current.id,
-            selectedKey: key,
-            mode: "exam",
-            sessionId,
-            timeMs,
-          });
-
-          // Auto-register wrong answers for SRS revision
-          if (!isCorrect) {
-            autoRegisterMistake(current.id);
-          }
-        } catch (e) {
-          console.error(e);
-        }
+      // Attempts are graded and recorded on submit from the FINAL answers;
+      // here we only note how long the first answer took.
+      if (questionTimesRef.current[current.id] === undefined) {
+        questionTimesRef.current[current.id] =
+          Date.now() - (questionStartTimesRef.current[current.id] ?? Date.now());
       }
+      setSelections((prev) => ({ ...prev, [current.id]: key }));
     },
-    [current, selections, recordAttempt, sessionId, autoRegisterMistake]
+    [current]
   );
 
   if (!questions || questions.length === 0) {

@@ -40,88 +40,116 @@ export async function fetchLeaderboard(
   limit = 50
 ): Promise<LeaderboardData> {
   const currentUserId = await getUserBucket();
+  limit = Math.min(100, Math.max(1, Math.floor(Number(limit) || 50)));
+  const weekStart = weekStartKey();
 
-  // Get all user profiles with XP, level, streaks
-  const profiles = await db.userProfile.findMany({
-    orderBy:
-      mode === "streak"
-        ? { currentStreak: "desc" }
-        : { totalXp: "desc" },
-    take: limit,
-  });
+  // Weekly XP per user (this week, Riyadh time)
+  const weeklyXpFor = async (userIds?: string[]) => {
+    const rows = await db.dailyActivity.groupBy({
+      by: ["userBucket"],
+      where: { date: { gte: weekStart }, ...(userIds ? { userBucket: { in: userIds } } : {}) },
+      _sum: { xpEarned: true },
+      orderBy: { _sum: { xpEarned: "desc" } },
+      ...(userIds ? {} : { take: limit }),
+    });
+    return new Map(rows.map((r) => [r.userBucket, r._sum.xpEarned ?? 0]));
+  };
 
-  // Get matching user info (name, image)
-  const userIds = profiles.map((p) => p.userBucket);
-  const users = await db.user.findMany({
-    where: { id: { in: userIds } },
-    select: { id: true, name: true, image: true },
-  });
+  // 1. Pick the top `limit` users for THIS mode (weekly used to re-sort the
+  //    all-time top 50, missing anyone with a great week but low total XP)
+  let topIds: string[];
+  let weeklyXpMap: Map<string, number>;
+  if (mode === "weekly") {
+    weeklyXpMap = await weeklyXpFor();
+    topIds = [...weeklyXpMap.keys()];
+  } else {
+    const top = await db.userProfile.findMany({
+      orderBy: mode === "streak" ? [{ currentStreak: "desc" }, { totalXp: "desc" }] : { totalXp: "desc" },
+      take: limit,
+      select: { userBucket: true },
+    });
+    topIds = top.map((p) => p.userBucket);
+    weeklyXpMap = await weeklyXpFor(topIds);
+  }
+
+  const idsToLoad = topIds.includes(currentUserId) ? topIds : [...topIds, currentUserId];
+  const [profiles, users, totalUsers] = await Promise.all([
+    db.userProfile.findMany({ where: { userBucket: { in: idsToLoad } } }),
+    db.user.findMany({
+      where: { id: { in: idsToLoad } },
+      select: { id: true, name: true, image: true },
+    }),
+    db.userProfile.count(),
+  ]);
+  if (!weeklyXpMap.has(currentUserId)) {
+    const mine = await weeklyXpFor([currentUserId]);
+    weeklyXpMap.set(currentUserId, mine.get(currentUserId) ?? 0);
+  }
+  const profileMap = new Map(profiles.map((p) => [p.userBucket, p]));
   const userMap = new Map(users.map((u) => [u.id, u]));
 
-  // Compute weekly XP from daily activity
-  const weekStart = weekStartKey();
-  const weeklyActivities = await db.dailyActivity.findMany({
-    where: {
-      userBucket: { in: userIds },
-      date: { gte: weekStart },
-    },
-  });
-  const weeklyXpMap = new Map<string, number>();
-  for (const a of weeklyActivities) {
-    weeklyXpMap.set(a.userBucket, (weeklyXpMap.get(a.userBucket) ?? 0) + a.xpEarned);
-  }
+  const scoreOf = (e: LeaderboardEntry) =>
+    mode === "weekly" ? e.weeklyXp : mode === "streak" ? e.currentStreak : e.totalXp;
 
-  // Build entries
-  // For weekly mode, we need to re-sort by weekly XP
-  let sorted = profiles.map((p, i) => {
-    const user = userMap.get(p.userBucket);
-    const isMe = p.userBucket === currentUserId;
+  const toEntry = (id: string): LeaderboardEntry | null => {
+    const p = profileMap.get(id);
+    const weeklyXp = weeklyXpMap.get(id) ?? 0;
+    if (!p && weeklyXp === 0) return null;
+    const user = userMap.get(id);
+    const isMe = id === currentUserId;
     return {
-      rank: 0, // will compute after sorting
-      userId: isMe ? p.userBucket : `user-${p.userBucket.slice(0, 8)}`,
+      rank: 0,
+      userId: isMe ? id : `user-${id.slice(0, 8)}`,
       name: user?.name ?? null,
       image: user?.image ?? null,
-      totalXp: p.totalXp,
-      level: p.level,
-      currentStreak: p.currentStreak,
-      longestStreak: p.longestStreak,
-      weeklyXp: weeklyXpMap.get(p.userBucket) ?? 0,
+      totalXp: p?.totalXp ?? 0,
+      level: p?.level ?? 1,
+      currentStreak: p?.currentStreak ?? 0,
+      longestStreak: p?.longestStreak ?? 0,
+      weeklyXp,
       isMe,
     };
+  };
+
+  const sorted = topIds
+    .map(toEntry)
+    .filter((e): e is LeaderboardEntry => e !== null)
+    .sort((a, b) => scoreOf(b) - scoreOf(a));
+
+  // Ranks with ties — same score, same rank
+  sorted.forEach((entry, i) => {
+    entry.rank = i > 0 && scoreOf(entry) === scoreOf(sorted[i - 1]) ? sorted[i - 1].rank : i + 1;
   });
 
-  // Sort by the selected mode
-  if (mode === "weekly") {
-    sorted.sort((a, b) => b.weeklyXp - a.weeklyXp);
-  } else if (mode === "streak") {
-    // Already sorted by currentStreak desc from query
-  }
-  // XP mode is already sorted by totalXp desc from query
-
-  // Trim to limit after re-sort
-  sorted = sorted.slice(0, limit);
-
-  // Assign ranks (with ties — same score gets same rank)
-  let rank = 1;
-  let prevScore = -1;
-  sorted = sorted.map((entry) => {
-    const score = mode === "weekly" ? entry.weeklyXp
-      : mode === "streak" ? entry.currentStreak
-      : entry.totalXp;
-    if (score !== prevScore) {
-      rank = sorted.indexOf(entry) + 1;
-      prevScore = score;
+  // 2. The current user's own rank, even when outside the top list
+  let currentUser = sorted.find((e) => e.isMe) ?? null;
+  if (!currentUser) {
+    const me = toEntry(currentUserId);
+    if (me) {
+      const myScore = scoreOf(me);
+      let ahead: number;
+      if (mode === "weekly") {
+        const rows = await db.$queryRaw<{ count: number }[]>`
+          SELECT COUNT(*)::int AS count FROM (
+            SELECT "userBucket" FROM daily_activities
+            WHERE date >= ${weekStart}
+            GROUP BY "userBucket"
+            HAVING SUM("xpEarned") > ${myScore}
+          ) t`;
+        ahead = rows[0]?.count ?? 0;
+      } else {
+        ahead = await db.userProfile.count({
+          where: mode === "streak" ? { currentStreak: { gt: myScore } } : { totalXp: { gt: myScore } },
+        });
+      }
+      currentUser = { ...me, rank: ahead + 1 };
     }
-    return { ...entry, rank };
-  });
-
-  // If current user is not in the top entries, include them at the bottom
-  let currentUser: LeaderboardEntry | null = sorted.find((e) => e.isMe) ?? null;
+  }
 
   return {
     mode,
     entries: sorted,
     currentUser,
-    totalUsers: profiles.length,
+    totalUsers,
   };
 }

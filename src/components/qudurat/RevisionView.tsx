@@ -394,6 +394,13 @@ function FlashcardPlayer() {
   const { data: mistakeIds, loading: mistakesLoading } = useMistakeQuestionIds(100);
   const { data: dueIds, loading: dueLoading } = useDueReviewIds(100);
   const { data: allQuestions, loading: questionsLoading } = useQuestions({ limit: 200 });
+  // Due/mistake questions are loaded by id: they may be anywhere in the bank,
+  // not just among the 200 sampled questions above.
+  const reviewIds = useMemo(
+    () => [...new Set([...(dueIds ?? []), ...(mistakeIds ?? [])])].slice(0, 200),
+    [dueIds, mistakeIds]
+  );
+  const { data: reviewQuestions, loading: reviewLoading } = useQuestionsByIds(reviewIds);
   const submitReview = useSubmitSrsReview();
   const [selectedCat, setSelectedCat] = useState<string | undefined>(undefined);
   const [cardIndex, setCardIndex] = useState(0);
@@ -404,6 +411,7 @@ function FlashcardPlayer() {
   const flashcards = useMemo(() => {
     if (!allQuestions) return [];
 
+    const byId = new Map([...allQuestions, ...(reviewQuestions ?? [])].map((q) => [q.id, q]));
     const dueSet = new Set(dueIds ?? []);
     const mistakeSet = new Set(mistakeIds ?? []);
     const seen = new Set<string>();
@@ -411,7 +419,7 @@ function FlashcardPlayer() {
 
     // 1. Due reviews first
     for (const id of dueIds ?? []) {
-      const q = allQuestions.find((q) => q.id === id);
+      const q = byId.get(id);
       if (q && !seen.has(q.id)) {
         if (!selectedCat || q.categorySlug === selectedCat) {
           queue.push(q);
@@ -423,7 +431,7 @@ function FlashcardPlayer() {
     // 2. Mistakes not yet scheduled
     for (const id of mistakeIds ?? []) {
       if (dueSet.has(id)) continue; // already in queue
-      const q = allQuestions.find((q) => q.id === id);
+      const q = byId.get(id);
       if (q && !seen.has(q.id)) {
         if (!selectedCat || q.categorySlug === selectedCat) {
           queue.push(q);
@@ -445,7 +453,7 @@ function FlashcardPlayer() {
     }
 
     return queue;
-  }, [allQuestions, dueIds, mistakeIds, selectedCat]);
+  }, [allQuestions, reviewQuestions, dueIds, mistakeIds, selectedCat]);
 
   const current = flashcards[cardIndex];
   const isDue = dueIds?.includes(current?.id ?? "") ?? false;
@@ -492,7 +500,7 @@ function FlashcardPlayer() {
   // Show loader while any data source is still loading
   // (prevents briefly flashing the "لا توجد بطاقات" empty state when
   // allQuestions loaded but dueIds/mistakeIds haven't arrived yet)
-  if (questionsLoading || mistakesLoading || dueLoading) {
+  if (questionsLoading || mistakesLoading || dueLoading || reviewLoading) {
     return <FullScreenLoader label="جارٍ تحضير البطاقات…" />;
   }
 
