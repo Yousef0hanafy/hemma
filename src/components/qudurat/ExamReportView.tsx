@@ -28,7 +28,6 @@ import {
 import { PassageView } from "./shared/PassageView";
 import { FullScreenLoader } from "./LoadingStates";
 import { ExamDeepReviewView } from "./ExamDeepReviewView";
-import { xpForExamSession } from "@/lib/engine/gamification";
 import { useShareAsImage } from "@/lib/hooks/use-share-image";
 import { useState } from "react";
 
@@ -37,11 +36,14 @@ export function ExamReportView({
   selections,
   durationSec,
   actualDurationSec,
+  xpEarned = 0,
 }: {
   questionIds: string[];
   selections: Record<string, string | null>;
   durationSec: number;
   actualDurationSec?: number;
+  /** Bonus XP the server awarded for this exam */
+  xpEarned?: number;
 }) {
   const { setView } = useViewStore();
   const { data: questions } = useQuestionsByIds(questionIds);
@@ -77,7 +79,7 @@ export function ExamReportView({
       wrong,
       skipped,
       scorePercent,
-      xpEarned: xpForExamSession(scorePercent),
+      xpEarned,
       byCategory: Object.entries(byCategory).map(([slug, s]) => ({
         slug,
         ...s,
@@ -90,7 +92,7 @@ export function ExamReportView({
         percent: s.total > 0 ? (s.correct / s.total) * 100 : 0,
       })),
     };
-  }, [questions, selections]);
+  }, [questions, selections, xpEarned]);
 
   // Deep review mode — show one question at a time
   if (showDeepReview) {

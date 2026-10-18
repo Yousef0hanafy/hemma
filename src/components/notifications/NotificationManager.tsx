@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { useSession } from "next-auth/react";
+import { todayKey } from "@/lib/engine/gamification";
 import {
   supportsNotifications,
   getPermissionStatus,
@@ -79,9 +80,7 @@ export function NotificationManager() {
         // ── Streak-at-risk ────────────────────────────────────────────
         if (profile.currentStreak > 0) {
           // Check if the user has studied today
-          const today = new Date();
-          const todayKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
-          if (profile.lastActiveDate !== todayKey) {
+          if (profile.lastActiveDate !== todayKey()) {
             showStreakAlert(profile.currentStreak);
           }
         }

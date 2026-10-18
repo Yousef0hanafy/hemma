@@ -91,18 +91,43 @@ export function masteryLabel(score: number): string {
 // ---------------------------------------------------------------------------
 
 /** Returns "YYYY-MM-DD" in user-local timezone. */
+/**
+ * All day/week boundaries (streaks, daily activity, quests, leaderboards) use
+ * the students' local time — Saudi Arabia (UTC+3, no DST) — regardless of the
+ * server's or browser's time zone.
+ */
+export const APP_TIME_ZONE = "Asia/Riyadh";
+const APP_UTC_OFFSET = "+03:00";
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+// en-CA formats as YYYY-MM-DD
+const dayKeyFormatter = new Intl.DateTimeFormat("en-CA", {
+  timeZone: APP_TIME_ZONE,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+
 export function todayKey(d = new Date()): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
+  return dayKeyFormatter.format(d);
 }
 
 /** Returns the date key N days before the given date. */
 export function dayKeyOffset(days: number, from = new Date()): string {
-  const d = new Date(from);
-  d.setDate(d.getDate() - days);
-  return todayKey(d);
+  // Safe because APP_TIME_ZONE has no DST: every day is exactly 24h.
+  return todayKey(new Date(from.getTime() - days * DAY_MS));
+}
+
+/** The instant a day key starts in APP_TIME_ZONE. */
+export function dayStart(dayKey: string): Date {
+  return new Date(`${dayKey}T00:00:00${APP_UTC_OFFSET}`);
+}
+
+/** Shift a "YYYY-MM-DD" key by whole days. */
+function addDaysToKey(dayKey: string, days: number): string {
+  const d = new Date(`${dayKey}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
 }
 
 /**
@@ -220,11 +245,9 @@ export function weeklyChallengeForDate(dateStr: string): WeeklyChallenge {
  * Returns "YYYY-MM-DD".
  */
 export function weekStartKey(d = new Date()): string {
-  const day = d.getDay();
-  const diff = d.getDate() - day + (day === 0 ? -6 : 1); // Monday
-  const monday = new Date(d);
-  monday.setDate(diff);
-  return todayKey(monday);
+  const key = todayKey(d);
+  const day = new Date(`${key}T00:00:00Z`).getUTCDay(); // weekday in APP_TIME_ZONE
+  return addDaysToKey(key, day === 0 ? -6 : 1 - day); // Monday
 }
 
 /**
@@ -232,9 +255,7 @@ export function weekStartKey(d = new Date()): string {
  * Returns "YYYY-MM-DD".
  */
 export function weekEndKey(d = new Date()): string {
-  const monday = new Date(weekStartKey(d));
-  monday.setDate(monday.getDate() + 6);
-  return todayKey(monday);
+  return addDaysToKey(weekStartKey(d), 6);
 }
 
 // ---------------------------------------------------------------------------

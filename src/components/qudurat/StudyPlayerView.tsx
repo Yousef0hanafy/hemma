@@ -172,22 +172,20 @@ function StudyPlayerInner({
       if (!current || submitted) return;
       setSelectedKey(key);
       setSubmitted(true);
-      const isCorrect = key === current.correctKey;
       const timeMs = Date.now() - startTime;
 
       try {
         const result = await recordAttempt({
           questionId: current.id,
           selectedKey: key,
-          isCorrect,
           mode: "study",
           timeMs,
           confidence,
         });
-        if (!isCorrect) {
+        if (!result.isCorrect) {
           autoRegisterMistake(current.id);
         }
-        onResult(isCorrect);
+        onResult(result.isCorrect);
 
         if (result.xpEarned > 0) {
           toast.success(`+${toArabicDigits(result.xpEarned)} نقطة خبرة`, {

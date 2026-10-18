@@ -135,6 +135,8 @@ export function AppShell() {
                   questionIds={view.questionIds}
                   selections={view.selections}
                   durationSec={view.durationSec}
+                  actualDurationSec={view.actualDurationSec}
+                  xpEarned={view.xpEarned}
                 />
               )}
 

@@ -5,6 +5,7 @@
 
 import { db } from "@/lib/db";
 import { toCategoryDTO, toQuestionDTO, toSourceDTO } from "@/lib/content/dto";
+import type { QuestionDTO } from "@/lib/content/dto";
 import { requirePermission } from "@/lib/auth";
 
 export async function fetchSources() {
@@ -68,14 +69,32 @@ export async function fetchQuestionById(id: string) {
   return toQuestionDTO(q);
 }
 
-export async function fetchQuestionsByIds(ids: string[]) {
-  await requirePermission("question", "read");
+const MAX_IDS_PER_FETCH = 200;
+
+async function loadQuestionsByIds(ids: string[]): Promise<QuestionDTO[]> {
   if (!Array.isArray(ids) || ids.length === 0) {
     return [];
   }
+  const wanted = ids.filter((id) => typeof id === "string").slice(0, MAX_IDS_PER_FETCH);
   const qs = await db.question.findMany({
-    where: { id: { in: ids } },
+    where: { id: { in: wanted } },
     include: { category: true, source: true, passage: true },
   });
-  return qs.map(toQuestionDTO);
+  // Preserve the caller's order (sessions index questions by position)
+  const byId = new Map(qs.map((q) => [q.id, toQuestionDTO(q)]));
+  return wanted.map((id) => byId.get(id)).filter((q): q is QuestionDTO => q !== undefined);
+}
+
+export async function fetchQuestionsByIds(ids: string[]) {
+  await requirePermission("question", "read");
+  return loadQuestionsByIds(ids);
+}
+
+/** A question as shown during a running exam — without the answer or explanation. */
+export type ExamQuestionDTO = Omit<QuestionDTO, "correctKey" | "explanation" | "studyTip">;
+
+export async function fetchExamQuestionsByIds(ids: string[]): Promise<ExamQuestionDTO[]> {
+  await requirePermission("question", "read");
+  const qs = await loadQuestionsByIds(ids);
+  return qs.map(({ correctKey: _c, explanation: _e, studyTip: _s, ...rest }) => rest);
 }

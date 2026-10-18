@@ -7,47 +7,161 @@ import { db } from "@/lib/db";
 import { requirePermission } from "@/lib/auth";
 import { toQuestionDTO } from "@/lib/content/dto";
 import { applySm2, type SrsQuality } from "@/lib/engine/srs";
-import { computeMastery, levelForXp, levelProgress, todayKey, dayKeyOffset, updateStreak } from "@/lib/engine/gamification";
+import {
+  computeMastery,
+  dayKeyOffset,
+  dayStart,
+  levelForXp,
+  levelProgress,
+  todayKey,
+  updateStreak,
+  weekEndKey,
+  weekStartKey,
+  xpForCorrect,
+  xpForExamSession,
+} from "@/lib/engine/gamification";
+import type { Difficulty } from "@/lib/content/dto";
+
+const ANSWER_KEYS = ["أ", "ب", "ج", "د"] as const;
+type AnswerKey = (typeof ANSWER_KEYS)[number];
+const ATTEMPT_MODES = ["study", "exam", "revision"] as const;
+/** XP for a wrong answer — a small reward for effort. */
+const XP_FOR_EFFORT = 2;
+/** Exam bonus XP is only granted for exams with at least this many answers… */
+const EXAM_BONUS_MIN_ANSWERED = 5;
+/** …and only for this many exams per day, so it can't be farmed. */
+const EXAM_BONUS_MAX_PER_DAY = 3;
+const MAX_EXAM_QUESTIONS = 200;
+
+function isAnswerKey(v: unknown): v is AnswerKey {
+  return typeof v === "string" && (ANSWER_KEYS as readonly string[]).includes(v);
+}
+
+function isShortId(v: unknown): v is string {
+  return typeof v === "string" && v.length > 0 && v.length <= 128;
+}
+
+function clampInt(v: unknown, min: number, max: number): number {
+  const n = typeof v === "number" && Number.isFinite(v) ? Math.round(v) : 0;
+  return Math.min(max, Math.max(min, n));
+}
 
 export interface RecordAttemptInput {
   questionId: string;
   selectedKey: string | null;
-  isCorrect: boolean;
   mode: "study" | "exam" | "revision";
   sessionId?: string;
   timeMs?: number;
   confidence?: number;
 }
 
-export async function recordAttempt(input: RecordAttemptInput) {
-  const userId = await requirePermission("attempt", "create");
-  
-  // Validate input
-  if (!input.questionId || typeof input.questionId !== "string") {
-    throw new Error("معرّف السؤال غير صالح");
-  }
-  
-  if (!["study", "exam", "revision"].includes(input.mode)) {
-    throw new Error("وضع المحاولة غير صالح");
+/**
+ * Add XP to the user's profile and update their streak for today.
+ * XP is incremented atomically so concurrent attempts don't lose XP.
+ */
+async function awardXp(userId: string, xp: number) {
+  const today = todayKey();
+  const existing = await db.userProfile.findUnique({
+    where: { userBucket: userId },
+    select: { level: true, currentStreak: true, longestStreak: true, streakShields: true, lastActiveDate: true },
+  });
+
+  const streak = updateStreak(
+    existing?.currentStreak ?? 0,
+    existing?.lastActiveDate ?? null,
+    existing?.streakShields ?? 1
+  );
+
+  const profile = await db.userProfile.upsert({
+    where: { userBucket: userId },
+    create: {
+      userBucket: userId,
+      totalXp: xp,
+      level: levelForXp(xp),
+      currentStreak: streak.streak,
+      longestStreak: streak.streak,
+      streakShields: streak.shields,
+      lastActiveDate: today,
+    },
+    update: {
+      totalXp: { increment: xp },
+      currentStreak: streak.streak,
+      longestStreak: Math.max(existing?.longestStreak ?? 0, streak.streak),
+      streakShields: streak.shields,
+      lastActiveDate: today,
+    },
+  });
+
+  const newLevel = levelForXp(profile.totalXp);
+  if (newLevel !== profile.level) {
+    await db.userProfile.update({
+      where: { userBucket: userId },
+      data: { level: newLevel },
+    });
   }
 
-  // Record the attempt
+  return {
+    newLevel,
+    leveledUp: newLevel > (existing?.level ?? 1),
+    shieldEarned: streak.shieldEarned,
+  };
+}
+
+/**
+ * Record an answer. Correctness and XP are decided here from the stored
+ * question — never trusted from the client.
+ */
+export async function recordAttempt(input: RecordAttemptInput) {
+  const userId = await requirePermission("attempt", "create");
+
+  if (!isShortId(input.questionId)) {
+    throw new Error("معرّف السؤال غير صالح");
+  }
+  if (!(ATTEMPT_MODES as readonly string[]).includes(input.mode)) {
+    throw new Error("وضع المحاولة غير صالح");
+  }
+  if (input.selectedKey !== null && !isAnswerKey(input.selectedKey)) {
+    throw new Error("الإجابة غير صالحة");
+  }
+  if (input.sessionId !== undefined && !isShortId(input.sessionId)) {
+    throw new Error("معرّف الجلسة غير صالح");
+  }
+
+  const question = await db.question.findUnique({
+    where: { id: input.questionId },
+    select: { correctKey: true, difficulty: true },
+  });
+  if (!question) {
+    throw new Error("السؤال غير موجود");
+  }
+
+  const isCorrect = input.selectedKey !== null && input.selectedKey === question.correctKey;
+  const today = todayKey();
+
+  // XP only for the first attempt at a question each day — re-answering a
+  // question you've already seen today can't be used to farm XP.
+  const answeredToday = await db.attempt.findFirst({
+    where: { userBucket: userId, questionId: input.questionId, createdAt: { gte: dayStart(today) } },
+    select: { id: true },
+  });
+  const xpEarned = answeredToday
+    ? 0
+    : isCorrect
+      ? xpForCorrect(question.difficulty as Difficulty, input.mode)
+      : XP_FOR_EFFORT;
+
   const attempt = await db.attempt.create({
     data: {
       userBucket: userId,
       questionId: input.questionId,
       selectedKey: input.selectedKey,
-      isCorrect: input.isCorrect,
+      isCorrect,
       mode: input.mode,
       sessionId: input.sessionId,
-      timeMs: input.timeMs ?? 0,
-      confidence: input.confidence ?? 0,
+      timeMs: clampInt(input.timeMs, 0, 60 * 60 * 1000),
+      confidence: clampInt(input.confidence, 0, 5),
     },
   });
-
-  // Update daily activity
-  const today = todayKey();
-  const xpEarned = input.isCorrect ? 10 : 2; // give 2 XP for effort even if incorrect
 
   await db.dailyActivity.upsert({
     where: { userBucket_date: { userBucket: userId, date: today } },
@@ -55,72 +169,26 @@ export async function recordAttempt(input: RecordAttemptInput) {
       userBucket: userId,
       date: today,
       attempts: 1,
-      correct: input.isCorrect ? 1 : 0,
+      correct: isCorrect ? 1 : 0,
       xpEarned,
     },
     update: {
       attempts: { increment: 1 },
-      correct: { increment: input.isCorrect ? 1 : 0 },
+      correct: { increment: isCorrect ? 1 : 0 },
       xpEarned: { increment: xpEarned },
     },
   });
 
-  // Get or create user profile
-  let profile = await db.userProfile.findUnique({
-    where: { userBucket: userId },
-  });
-
-  let leveledUp = false;
-  let newLevel = 1;
-
-  if (!profile) {
-    profile = await db.userProfile.create({
-      data: {
-        userBucket: userId,
-        totalXp: xpEarned,
-        level: 1,
-        currentStreak: 1,
-        longestStreak: 1,
-        streakShields: 1,
-        lastActiveDate: today,
-      },
-    });
-    newLevel = 1;
-  } else {
-    const streakResult = updateStreak(
-      profile.currentStreak,
-      profile.lastActiveDate ?? "",
-      profile.streakShields
-    );
-
-    const oldLevel = profile.level;
-    const newTotalXp = profile.totalXp + xpEarned;
-    const computedLevel = levelForXp(newTotalXp);
-    if (computedLevel > oldLevel) {
-      leveledUp = true;
-    }
-    newLevel = computedLevel;
-
-    profile = await db.userProfile.update({
-      where: { userBucket: userId },
-      data: {
-        totalXp: newTotalXp,
-        currentStreak: streakResult.streak,
-        longestStreak: Math.max(profile.longestStreak, streakResult.streak),
-        streakShields: streakResult.shields,
-        lastActiveDate: today,
-        level: newLevel,
-      },
-    });
-  }
+  const { newLevel, leveledUp, shieldEarned } = await awardXp(userId, xpEarned);
 
   return {
     attemptId: attempt.id,
+    isCorrect,
     xpEarned,
     leveledUp,
     newLevel,
     unlockedAchievements: [] as string[],
-    shieldEarned: false,
+    shieldEarned,
     xpMilestonesHit: [] as Array<{ xp: number; label: string }>,
     streakMilestoneHit: undefined as { streak: number; label: string } | undefined,
   };
@@ -240,28 +308,79 @@ export async function autoRegisterMistake(questionId: string) {
 export async function finalizeExamSession(
   sessionId: string,
   questionIds: string[],
-  selections: Record<string, "أ" | "ب" | "ج" | "د" | null>,
+  selections: Record<string, string | null>,
   actualDurationSec?: number
 ) {
   const userId = await requirePermission("attempt", "create");
-  
-  if (!sessionId || typeof sessionId !== "string") {
+
+  if (!isShortId(sessionId)) {
     throw new Error("معرّف الجلسة غير صالح");
   }
+  if (
+    !Array.isArray(questionIds) ||
+    questionIds.length === 0 ||
+    questionIds.length > MAX_EXAM_QUESTIONS ||
+    !questionIds.every(isShortId) ||
+    new Set(questionIds).size !== questionIds.length
+  ) {
+    throw new Error("قائمة الأسئلة غير صالحة");
+  }
+  if (!selections || typeof selections !== "object") {
+    throw new Error("الإجابات غير صالحة");
+  }
+  // Keep only answers for questions in this exam, with valid keys
+  const cleanSelections: Record<string, AnswerKey | null> = {};
+  for (const id of questionIds) {
+    const sel = selections[id];
+    cleanSelections[id] = isAnswerKey(sel) ? sel : null;
+  }
 
-  // Save exam session data
+  // Idempotent: a retried submit returns the stored result instead of failing
+  const existing = await db.examSessionData.findUnique({ where: { sessionId } });
+  if (existing) {
+    if (existing.userBucket !== userId) throw new Error("غير مصرح به");
+    return { success: true, xpEarned: 0 };
+  }
+
+  // Grade on the server from the stored answer keys
+  const questions = await db.question.findMany({
+    where: { id: { in: questionIds } },
+    select: { id: true, correctKey: true },
+  });
+  const answered = questionIds.filter((id) => cleanSelections[id] !== null).length;
+  const correct = questions.filter((q) => cleanSelections[q.id] === q.correctKey).length;
+  const scorePercent = (correct / questionIds.length) * 100;
+
+  const examsToday = await db.examSessionData.count({
+    where: { userBucket: userId, createdAt: { gte: dayStart(todayKey()) } },
+  });
+  const xpEarned =
+    answered >= EXAM_BONUS_MIN_ANSWERED && examsToday < EXAM_BONUS_MAX_PER_DAY
+      ? xpForExamSession(scorePercent)
+      : 0;
+
+  const durationSec = clampInt(actualDurationSec, 0, 24 * 60 * 60);
   await db.examSessionData.create({
     data: {
       sessionId,
       userBucket: userId,
       questionIds: JSON.stringify(questionIds),
-      selections: JSON.stringify(selections),
-      durationSec: actualDurationSec ?? 0,
-      actualDurationSec: actualDurationSec ?? 0,
+      selections: JSON.stringify(cleanSelections),
+      durationSec,
+      actualDurationSec: durationSec,
     },
   });
 
-  return { success: true };
+  if (xpEarned > 0) {
+    await db.dailyActivity.upsert({
+      where: { userBucket_date: { userBucket: userId, date: todayKey() } },
+      create: { userBucket: userId, date: todayKey(), xpEarned },
+      update: { xpEarned: { increment: xpEarned } },
+    });
+    await awardXp(userId, xpEarned);
+  }
+
+  return { success: true, xpEarned };
 }
 
 // ── Data Fetching Functions ─────────────────────────────────────
@@ -386,13 +505,10 @@ export async function fetchMistakeQuestionIds(limit = 50) {
 export async function fetchDailyActivity(days = 84) {
   const userId = await requirePermission("attempt", "read");
   
-  const since = new Date();
-  since.setDate(since.getDate() - days);
-  
   const activities = await db.dailyActivity.findMany({
-    where: { 
+    where: {
       userBucket: userId,
-      date: { gte: since.toISOString().split('T')[0] }
+      date: { gte: dayKeyOffset(days) }
     },
     orderBy: { date: "asc" },
   });
@@ -590,16 +706,10 @@ export async function fetchTodayReviewCount() {
   const userId = await requirePermission("review", "read");
   
   const today = todayKey();
-  const startOfDay = new Date(today);
-  startOfDay.setHours(0, 0, 0, 0);
-  
-  const endOfDay = new Date(today);
-  endOfDay.setHours(23, 59, 59, 999);
-
   const count = await db.reviewSchedule.count({
-    where: { 
+    where: {
       userBucket: userId,
-      nextReviewAt: { gte: startOfDay, lte: endOfDay }
+      nextReviewAt: { gte: dayStart(today), lt: dayStart(dayKeyOffset(-1)) }
     },
   });
 
@@ -688,23 +798,11 @@ export async function fetchRecentlyStudiedCategories(limit = 5) {
 export async function fetchWeeklyChallenge() {
   const userId = await requirePermission("challenge", "read");
   
-  const today = todayKey();
-  const startOfWeek = new Date(today);
-  startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay());
-  startOfWeek.setHours(0, 0, 0, 0);
-  
-  const endOfWeek = new Date(startOfWeek);
-  endOfWeek.setDate(endOfWeek.getDate() + 6);
-  endOfWeek.setHours(23, 59, 59, 999);
-  
-  // Get weekly activity
+  // Get weekly activity (Monday–Sunday, Riyadh time — same week as the leaderboard)
   const weeklyActivity = await db.dailyActivity.findMany({
     where: {
       userBucket: userId,
-      date: {
-        gte: startOfWeek.toISOString().split('T')[0],
-        lte: endOfWeek.toISOString().split('T')[0]
-      }
+      date: { gte: weekStartKey(), lte: weekEndKey() }
     }
   });
   

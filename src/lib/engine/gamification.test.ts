@@ -706,3 +706,22 @@ describe("pickAdaptiveOrder", () => {
     expect(result1.map((i) => i.id)).toEqual(result2.map((i) => i.id));
   });
 });
+
+describe("Riyadh day boundaries", () => {
+  it("rolls the day over at Riyadh midnight, not UTC midnight", () => {
+    // 22:30 UTC = 01:30 the next day in Riyadh
+    expect(todayKey(new Date("2026-07-14T22:30:00Z"))).toBe("2026-07-15");
+    expect(todayKey(new Date("2026-07-14T20:59:00Z"))).toBe("2026-07-14");
+  });
+
+  it("offsets days relative to the Riyadh date", () => {
+    expect(dayKeyOffset(1, new Date("2026-07-14T22:30:00Z"))).toBe("2026-07-14");
+  });
+
+  it("starts the week on the Riyadh Monday", () => {
+    // Sunday 21:30 UTC = Monday 00:30 in Riyadh
+    expect(weekStartKey(new Date("2026-07-19T21:30:00Z"))).toBe("2026-07-20");
+    expect(weekStartKey(new Date("2026-07-19T20:00:00Z"))).toBe("2026-07-13");
+    expect(weekEndKey(new Date("2026-07-19T20:00:00Z"))).toBe("2026-07-19");
+  });
+});

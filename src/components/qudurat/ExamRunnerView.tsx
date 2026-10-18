@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import { useViewStore } from "@/lib/store/view-store";
 import {
-  useQuestionsByIds,
+  useExamQuestionsByIds,
   useRecordAttempt,
   useFinalizeExam,
   useAutoRegisterMistake,
@@ -51,7 +51,7 @@ export function ExamRunnerView({
   durationSec: number;
 }) {
   const { setView } = useViewStore();
-  const { data: questions } = useQuestionsByIds(questionIds);
+  const { data: questions } = useExamQuestionsByIds(questionIds);
   const recordAttempt = useRecordAttempt();
   const finalizeExam = useFinalizeExam();
   const autoRegisterMistake = useAutoRegisterMistake();
@@ -93,7 +93,7 @@ export function ExamRunnerView({
         finalSelections[q.id] = selections[q.id] ?? null;
       }
       const actualDurationSec = Math.floor((Date.now() - examStartTime) / 1000);
-      await finalizeExam(sessionId, questionIds, finalSelections, actualDurationSec);
+      const { xpEarned } = await finalizeExam(sessionId, questionIds, finalSelections, actualDurationSec);
       clearPendingExam();
       setView({
         kind: "exam_report",
@@ -102,6 +102,7 @@ export function ExamRunnerView({
         selections: finalSelections,
         durationSec,
         actualDurationSec,
+        xpEarned,
       });
     } catch (e) {
       console.error(e);
@@ -143,13 +144,11 @@ export function ExamRunnerView({
       // If first selection for this question, record the attempt silently
       // (so we get attempt history for analytics)
       if (!prevSelection) {
-        const isCorrect = key === current.correctKey;
         const timeMs = Date.now() - (questionStartTimesRef.current[current.id] ?? Date.now());
         try {
-          await recordAttempt({
+          const { isCorrect } = await recordAttempt({
             questionId: current.id,
             selectedKey: key,
-            isCorrect,
             mode: "exam",
             sessionId,
             timeMs,

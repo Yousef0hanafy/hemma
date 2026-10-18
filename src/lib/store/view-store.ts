@@ -13,7 +13,7 @@ export type ViewKey =
   | { kind: "study_setup" }
   | { kind: "exam_setup" }
   | { kind: "exam_running"; sessionId: string; questionIds: string[]; durationSec: number }
-  | { kind: "exam_report"; sessionId: string; questionIds: string[]; selections: Record<string, string | null>; durationSec: number; actualDurationSec?: number }
+  | { kind: "exam_report"; sessionId: string; questionIds: string[]; selections: Record<string, string | null>; durationSec: number; actualDurationSec?: number; xpEarned?: number }
   | { kind: "revision"; tab: "mistakes" | "favorites" | "flashcards" }
   | { kind: "stats" }
   | { kind: "search" }

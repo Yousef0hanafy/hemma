@@ -10,6 +10,8 @@ import {
   fetchQuestions,
   fetchQuestionById,
   fetchQuestionsByIds,
+  fetchExamQuestionsByIds,
+  type ExamQuestionDTO,
   type QuestionFilter,
 } from "@/server/actions/questions";
 import {
@@ -157,6 +159,16 @@ export function useQuestionsByIds(ids: string[]) {
   return useServerData<QuestionDTO[]>(
     key,
     () => (ids.length > 0 ? fetchQuestionsByIds(ids) : Promise.resolve([])),
+    [ids.join(",")]
+  );
+}
+
+/** Questions for a running exam — answers are withheld until the exam is submitted. */
+export function useExamQuestionsByIds(ids: string[]) {
+  const key = `exam-questions-by-ids:${ids.join(",")}`;
+  return useServerData<ExamQuestionDTO[]>(
+    key,
+    () => (ids.length > 0 ? fetchExamQuestionsByIds(ids) : Promise.resolve([])),
     [ids.join(",")]
   );
 }
@@ -326,7 +338,7 @@ export function useFinalizeExam() {
       const result = await finalizeExamSession(
         sessionId,
         questionIds,
-        selections as Record<string, "أ" | "ب" | "ج" | "د" | null>,
+        selections,
         actualDurationSec
       );
       invalidate(`${userId}:profile`);
