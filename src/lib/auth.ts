@@ -9,35 +9,6 @@ import { clientIpFromHeaders, consumeRateLimit, RATE_LIMITS } from "./rate-limit
 /** Error code surfaced to the client by signIn() when login is throttled. */
 export const LOGIN_RATE_LIMITED = "RATE_LIMITED";
 
-// ── Token Revocation Store ─────────────────────────────────────
-// Database-backed token revocation store for multi-instance support
-
-export async function isTokenRevoked(jti: string): Promise<boolean> {
-  try {
-    const token = await db.revokedToken.findUnique({ where: { jti } });
-    if (!token) return false;
-    if (token.expiresAt && token.expiresAt < new Date()) {
-      return false; // Expired revocation entry
-    }
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-export async function revokeToken(jti: string): Promise<void> {
-  try {
-    const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 min TTL
-    await db.revokedToken.upsert({
-      where: { jti },
-      create: { jti, expiresAt },
-      update: { expiresAt },
-    });
-  } catch (error) {
-    console.error("[TokenRevocation] Failed to revoke token:", error);
-  }
-}
-
 // ── Role-Based Access Control ───────────────────────────────────
 
 export type UserRole = "student" | "admin" | "editor" | "reviewer";
@@ -231,18 +202,11 @@ export const authOptions: AuthOptions = {
           await db.user.update({ where: { id: user.id }, data: { role: "admin" } });
           token.role = "admin";
         }
-        token.jti = crypto.randomUUID();
-        token.accessToken = crypto.randomUUID();
-        token.refreshToken = crypto.randomUUID();
-        token.accessTokenExpires = Date.now() + 15 * 60 * 1000; // 15 min
       }
 
-      // Check if token is revoked in database
-      if (token.jti && (await isTokenRevoked(token.jti as string))) {
-        return {};
-      }
-
-      // Live DB lookup to verify user existence and ensure fresh role
+      // Live DB lookup on every request: a deleted user loses access and a
+      // role change (promotion/demotion) applies immediately — this is the
+      // session "revocation" mechanism for these stateless JWTs.
       if (token.id) {
         try {
           const dbUser = await db.user.findUnique({
@@ -262,20 +226,12 @@ export const authOptions: AuthOptions = {
         }
       }
 
-      // Return token if access token is still valid
-      if (Date.now() < (token.accessTokenExpires as number)) {
-        return token;
-      }
-
-      return {
-        ...token,
-        accessTokenExpires: Date.now() + 15 * 60 * 1000,
-      };
+      return token;
     },
     async session({ session, token }) {
       if (session.user) {
-        (session.user as any).id = token.id as string;
-        (session.user as any).role = token.role as string;
+        session.user.id = token.id as string;
+        session.user.role = token.role as string;
       }
       return session;
     },
@@ -306,24 +262,10 @@ export async function requirePermission(
     throw new Error("UNAUTHORIZED");
   }
 
-  const userRole = (session.user as any).role as UserRole;
+  const userRole = session.user.role as UserRole;
   if (!hasPermission(userRole, resource, action)) {
     throw new Error("FORBIDDEN");
   }
 
   return session.user.id;
-}
-
-/**
- * Get the current user's role from the session
- */
-export async function getCurrentUserRole(): Promise<UserRole | null> {
-  const { getServerSession } = await import("next-auth");
-  const session = await getServerSession(authOptions);
-  
-  if (!session?.user?.id) {
-    return null;
-  }
-
-  return (session.user as any).role as UserRole;
 }

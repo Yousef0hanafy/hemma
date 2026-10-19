@@ -30,7 +30,7 @@
               │        │         │
               │  ┌─────▼──────┐  │
               │  │  AI Layer  │  │
-              │  │  (Gemini)  │  │
+              │  │  (OpenRouter)│  │
               │  └─────┬──────┘  │
               │        │         │
               │  ┌─────▼──────┐  │
@@ -117,7 +117,7 @@ hemma/
 │   │   │   ├── student-profile.ts
 │   │   │   └── studio-*.ts     # 15+ Studio server actions
 │   │   └── ai/
-│   │       ├── evaluator.ts    # Gemini client + scoring
+│   │       ├── evaluator.ts    # OpenRouter client + scoring
 │   │       ├── prompts.ts      # AI prompt templates
 │   │       ├── scoring.ts      # Heuristic fallback scoring
 │   │       ├── service.ts      # AI processing pipeline
@@ -173,9 +173,9 @@ hemma/
    c. Inserts Questions with relations
    d. If auto-processing enabled: kicks off AI pipeline
 5. AI pipeline (async):
-   a. Quality check via Gemini
-   b. Difficulty estimation via Gemini
-   c. Explanation generation via Gemini
+   a. Quality check via OpenRouter
+   b. Difficulty estimation via OpenRouter
+   c. Explanation generation via OpenRouter
 6. Results stored in AIProcessingLog
 ```
 
@@ -225,4 +225,4 @@ hemma/
 | **Prisma** over Drizzle | Better Postgres support, mature migration system |
 | **Neon** over Supabase | Serverless Postgres with branching, good free tier |
 | **JWT sessions** (from v0.2) | Required for Credentials provider in NextAuth v4 |
-| **Gemini only** | Single provider simplicity; Groq considered but deferred |
+| **OpenRouter only** | One OpenAI-compatible API in front of many models (free tier by default) |

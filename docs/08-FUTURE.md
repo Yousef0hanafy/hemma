@@ -20,8 +20,8 @@ These will cause real problems if you launch without them.
 | # | Item | Effort | Impact | Details |
 |---|------|--------|--------|---------|
 | 1 | **Install pending deps** | 🟢 | 🌟 | `pnpm add bcryptjs @types/bcryptjs @sentry/nextjs` — auth + error tracking won't work without them |
-| 2 | **Prisma db push** | 🟢 | 🌟 | Sync the schema (password field on User model) to the database |
-| 3 | **Seed content** | 🟢 | 🌟 | Run `bun run scripts/seed-content.ts` to populate questions. Without content, the app is empty |
+| 2 | **Apply migrations** | 🟢 | 🌟 | `pnpm db:deploy` (one-time baseline on the existing DB — see docs/05-SETUP.md) |
+| 3 | **Seed content** | 🟢 | 🌟 | Run `npx tsx scripts/seed-content.ts` to populate questions. Without content, the app is empty |
 | 4 | **Set up production env vars** | 🟢 | 🌟 | Configure all env vars in Vercel/Neon — Google OAuth redirect URIs must match production domain |
 | 5 | **Configure Neon backup** | 🟢 | 👍 | Neon has point-in-time recovery — enable it. One bad migration and data is gone |
 
@@ -93,12 +93,12 @@ Without data, you're guessing.
 
 | # | Item | Effort | Impact | Details |
 |---|------|--------|--------|---------|
-| 36 | **AI Study Buddy for Students** | 🔴 | 🌟 | Student-facing AI chat: "اسأل AI عن这个概念". Students ask questions about concepts they don't understand. Uses Gemini. This is the #1 feature that would set this platform apart |
+| 36 | **AI Study Buddy for Students** | 🔴 | 🌟 | Student-facing AI chat: "اسأل AI عن هذا المفهوم". Students ask questions about concepts they don't understand. ✅ Built (OpenRouter). This is the #1 feature that would set this platform apart |
 | 37 | **AI question generation** | 🔴 | 🌟 | "Generate 10 تناظر لفظي questions about this topic." Admin enters a topic, AI generates questions with options and explanations. Massive content creation accelerator |
 | 38 | **AI flashcard generation** | 🟡 | 🌟 | Auto-generate SRS flashcards from wrong answers. "You got this wrong — here's a flashcard to help you remember" |
 | 39 | **AI content gap analysis** | 🟡 | 👍 | "You have 500 تناظر لفظي questions but only 50 استيعاب المقروء — create more" |
 | 40 | **AI student progress report** | 🟡 | 👍 | Generate a natural-language summary: "في الأسبوع الماضي، تحسّنت في التناظر اللفظي بنسبة 15% ولكن تراجعت في إكمال الجمل..." |
-| 41 | **Multi-provider AI routing** | 🟡 | 🌟 | Route tasks: Groq for fast/cheap (difficulty estimation), Gemini for complex reasoning (study plans). Provides redundancy |
+| 41 | **Multi-provider AI routing** | 🟡 | 🌟 | ✅ Partly done: OpenRouter fronts many models with fallback; per-task model routing is still open |
 | 42 | **AI-powered search** | 🟢 | 👍 | Semantic search over questions, not just text matching. "اعطيني أسئلة صعبة عن الطقس" |
 | 43 | **AI difficulty calibration** | 🟡 | 👍 | Adjust difficulty labels based on actual student performance data, not just AI estimation |
 | 44 | **Voice questions (text-to-speech)** | 🟡 | 👍 | Read questions aloud for listening comprehension practice. Useful for استيعاب المقروء |
@@ -237,7 +237,7 @@ If you want the highest ROI for your time:
 
 | Order | Item | Why |
 |-------|------|-----|
-| **1** | **Install deps + db push + seed content** | Nothing else matters without a working app with content |
+| **1** | **Install deps + apply migrations + seed content** | Nothing else matters without a working app with content |
 | **2** | **Confetti celebrations** | 1 hour, massive feel improvement. Gamification feels incomplete without it |
 | **3** | **Sound effects** | 2-3 hours. Biggest "quality jump" per effort |
 | **4** | **Plausible Analytics** | 30 minutes. Stop making product decisions in the dark |

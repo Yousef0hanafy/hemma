@@ -94,7 +94,7 @@ export function useServerData<T>(
   deps: unknown[] = []
 ): { data: T | null; loading: boolean; error: Error | null; refresh: () => void } {
   const { data: session } = useSession();
-  const userId = (session?.user as any)?.id || "guest";
+  const userId = session?.user?.id || "guest";
   const scopedKey = `${userId}:${key}`;
   useEffect(() => {
     activeUserId = userId;
@@ -287,7 +287,7 @@ export function useExamSessionData(sessionId: string | null) {
 
 export function useRecordAttempt() {
   const { data: session } = useSession();
-  const userId = (session?.user as any)?.id || "guest";
+  const userId = session?.user?.id || "guest";
   return useCallback(async (input: RecordAttemptInput) => {
     const result = await recordAttempt(input);
     invalidate(`${userId}:mastery`);
@@ -303,7 +303,7 @@ export function useRecordAttempt() {
 
 export function useToggleFavorite() {
   const { data: session } = useSession();
-  const userId = (session?.user as any)?.id || "guest";
+  const userId = session?.user?.id || "guest";
   return useCallback(async (questionId: string) => {
     const result = await toggleFavorite(questionId);
     invalidate(`${userId}:favorites`);
@@ -313,7 +313,7 @@ export function useToggleFavorite() {
 
 export function useSubmitSrsReview() {
   const { data: session } = useSession();
-  const userId = (session?.user as any)?.id || "guest";
+  const userId = session?.user?.id || "guest";
   return useCallback(async (questionId: string, quality: SrsQuality) => {
     const result = await submitSrsReview(questionId, quality);
     invalidate(`${userId}:due-reviews`);
@@ -324,7 +324,7 @@ export function useSubmitSrsReview() {
 
 export function useAutoRegisterMistake() {
   const { data: session } = useSession();
-  const userId = (session?.user as any)?.id || "guest";
+  const userId = session?.user?.id || "guest";
   return useCallback(async (questionId: string) => {
     await autoRegisterMistake(questionId);
     invalidate(`${userId}:due-reviews`);
@@ -334,7 +334,7 @@ export function useAutoRegisterMistake() {
 
 export function useFinalizeExam() {
   const { data: session } = useSession();
-  const userId = (session?.user as any)?.id || "guest";
+  const userId = session?.user?.id || "guest";
   return useCallback(
     async (
       sessionId: string,

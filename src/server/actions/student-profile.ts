@@ -69,11 +69,11 @@ export async function fetchExtendedProfile(): Promise<ExtendedProfile | null> {
     return null;
   }
 
-  const sessionUserId = (session.user as any).id as string | undefined;
+  const sessionUserId = session.user.id as string | undefined;
   const sessionEmail = session.user.email as string | null | undefined;
   const sessionName = session.user.name as string | null | undefined;
   const sessionImage = session.user.image as string | null | undefined;
-  const sessionRole = (session.user as any).role as string | undefined;
+  const sessionRole = session.user.role as string | undefined;
 
   // 1. Fetch user from DB
   let user: { id: string; name: string | null; email: string | null; image: string | null; role: string } | null = null;

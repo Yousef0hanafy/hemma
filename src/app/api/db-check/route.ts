@@ -26,7 +26,7 @@ export async function GET(request: Request) {
 
   // Gate 2: Require an authenticated admin session
   const session = await getServerSession(authOptions);
-  const role = (session?.user as any)?.role as string | undefined;
+  const role = session?.user?.role as string | undefined;
 
   if (!session?.user?.id || role !== "admin") {
     return NextResponse.json(

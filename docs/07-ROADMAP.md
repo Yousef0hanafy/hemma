@@ -47,7 +47,7 @@
 | Sources Management | ✅ | CRUD, processing status, export |
 | Users Management | ✅ | Table, roles, activity stats |
 | Settings Page | ✅ | Auto-processing toggles, defaults |
-| AI Chat Assistant | ✅ | Gemini streaming chat |
+| AI Chat Assistant | ✅ | OpenRouter streaming chat |
 | Processing Audit | ✅ | Full audit trail with filters |
 | Sidebar Badges | ✅ | Real-time counts on nav items |
 
@@ -57,25 +57,27 @@
 
 | Item | Status | Notes |
 |------|--------|-------|
-| TypeScript Strict Mode | ✅ | No `any` types in production code |
+| TypeScript Strict Mode | 🟡 | `strict` on but `noImplicitAny: false`; some `any` remains (lint warnings) |
 | RTL Support | ✅ | Full Arabic layout |
 | PWA | ✅ | Service worker, manifest, offline |
 | Dark Mode | ✅ | next-themes with class strategy |
 | Error Boundary | ✅ | Component-level + global |
-| Sentry Error Tracking | ✅ | Config ready (needs `pnpm add @sentry/nextjs`) |
-| Error Boundary | ✅ | Catches + reports to Sentry |
-| Unit Tests | ✅ | 71 tests for gamification engine |
+| Sentry Error Tracking | ✅ | Installed; set `SENTRY_DSN` + `NEXT_PUBLIC_SENTRY_DSN` |
+| Prisma Migrations | ✅ | `prisma/migrations` (baseline + drift repair) |
+| Rate Limiting | ✅ | Postgres-backed: login, signup, AI chat |
+| Security Headers | ✅ | Set in `next.config.ts` (full CSP still to do) |
+| Unit Tests | ✅ | ~140 tests (gamification, grading, auth guards, AI config, ingestion; DB integration tests opt-in) |
 | Legal Pages | ✅ | Terms + Privacy in Arabic |
 | SEO Metadata | ✅ | OpenGraph, Twitter cards, manifest |
 
 ---
 
-## 🟡 In Progress — What Was Just Built (Needs Activation)
+## 🟡 Needs Activation
 
 | Item | Action Needed |
 |------|---------------|
-| Email/Password Auth | Run `pnpm add bcryptjs @types/bcryptjs` + `npx prisma db push` |
-| Sentry Error Tracking | Run `pnpm add @sentry/nextjs` + add `SENTRY_DSN` to `.env` |
+| Migrations on production | One-time baseline — see `docs/05-SETUP.md` |
+| First admin | Set `ADMIN_EMAIL` (Google sign-in) or `pnpm admin:grant` |
 
 ---
 
@@ -87,7 +89,8 @@
 | P1 | **Populate content** (seed questions) | ~30min | 🔥 Essential |
 | P2 | **Product analytics** (Plausible/PostHog) | ~2hrs | Understand user behavior |
 | P2 | **SEO** (sitemap.xml + JSON-LD) | ~1hr | Organic traffic |
-| P2 | **Rate limiting** on auth endpoints | ~1hr | Security |
+| P2 | **Full CSP** with nonces | ~2hrs | Security |
+| P2 | **Large uploads** (> 4 MB) via direct-to-storage (Vercel Blob) | ~3hrs | Bigger sources |
 | P3 | **Accessibility audit** | ~3hrs | Screen reader support |
 | P3 | **Studio mobile responsiveness** | ~3hrs | Manage content from phone |
 
@@ -97,7 +100,6 @@
 
 | Idea | Category | Why |
 |------|----------|-----|
-| **AI Study Buddy for Students** | Feature | Student-facing AI chat for concept questions |
 | **Sound Effects** | UX | Correct/wrong sounds, level-up jingles |
 | **Wrong Answer Analytics** | Feature | Heatmaps of common mistakes |
 | **Pomodoro Timer** | UX | 25-min focus timer integrated with study |
@@ -107,8 +109,6 @@
 | **PDF Export** | Feature | Download reports, certificates |
 | **Multi-language Support** | Architecture | English/Urdu alongside Arabic |
 | **Monetization / Subscriptions** | Business | Premium content tiers |
-| **Groq API Integration** | AI | Second AI provider for speed/cost optimization |
-| **Bulk Question Editing** | Studio | Edit fields across hundreds of questions |
 | **Content Scheduling** | Studio | Schedule when content goes live |
 | **Question Templates** | Studio | Save reusable question formats |
 | **Docker Compose** | DevOps | Easy local development environment |
@@ -119,9 +119,9 @@
 
 ### Phase 1: Ship (1-2 days)
 1. ✅ Pre-deployment fixes (done)
-2. ⬜ Install remaining deps (bcryptjs, @sentry/nextjs)
-3. ⬜ Prisma db push
-4. ⬜ Seed content
+2. ✅ Hardening pass (auth, grading, migrations, rate limits) — see `docs/DISCOVERY.md`
+3. ⬜ Baseline + apply migrations on Neon
+4. ⬜ Seed / import content and publish it
 5. ⬜ Deploy to Vercel
 
 ### Phase 2: Measure (1 week)
@@ -130,13 +130,13 @@
 8. ⬜ Fix critical bugs from real usage
 
 ### Phase 3: Grow (2-4 weeks)
-9. ⬜ AI Study Buddy for students
+9. ✅ AI Study Buddy for students
 10. ⬜ SEO optimization
 11. ⬜ Sound effects
 12. ⬜ Shareable progress cards
 
 ### Phase 4: Scale (1-2 months)
-13. ⬜ Multi-provider AI (Groq)
+13. ✅ Multi-model AI via OpenRouter
 14. ⬜ Study groups
 15. ⬜ Mobile app / PWA improvements
 16. ⬜ Monetization

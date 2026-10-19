@@ -6,11 +6,11 @@
 
 ## Prerequisites
 
-- **Node.js** 18+ or **Bun** 1.x
+- **Node.js** 20.9+ and **pnpm** (version pinned in `package.json`)
 - **pnpm** (recommended) or npm
 - **PostgreSQL** database (Neon recommended for production)
 - **Google Cloud Console** account (for OAuth credentials)
-- **Google AI Studio** account (for Gemini API key, optional)
+- **OpenRouter** account (API key for AI features, optional)
 - **Sentry** account (for error tracking, optional)
 
 ---
@@ -45,9 +45,12 @@ GOOGLE_CLIENT_SECRET=your-client-secret
 NEXTAUTH_SECRET=your-random-secret
 NEXTAUTH_URL=http://localhost:3000
 
-# Gemini AI (get from https://aistudio.google.com/apikey)
-GOOGLE_API_KEY=your-gemini-key
-AI_MODEL=gemini-2.0-flash
+# AI via OpenRouter (get a key at https://openrouter.ai/keys)
+OPENROUTER_API_KEY=sk-or-...
+AI_MODEL=openrouter/free
+
+# Owner account: promoted to admin on Google sign-in
+ADMIN_EMAIL=you@gmail.com
 
 # Sentry (optional — get from https://sentry.io)
 SENTRY_DSN=
@@ -65,7 +68,7 @@ Add your question JSON files to the `upload/` directory, then:
 
 ```bash
 # Register files in src/lib/content/manifest.ts first
-bun run scripts/seed-content.ts
+npx tsx scripts/seed-content.ts
 ```
 
 ### 5. Start Dev Server
@@ -187,8 +190,11 @@ node .next/standalone/server.js
 | `GOOGLE_CLIENT_SECRET` | ✅ (for Google auth) | Google OAuth client secret |
 | `NEXTAUTH_SECRET` | ✅ | Random string for session encryption |
 | `NEXTAUTH_URL` | ✅ | App URL (must be correct for production) |
-| `GOOGLE_API_KEY` | ❌ | Gemini API key (AI features unavailable without it) |
-| `AI_MODEL` | ❌ | Gemini model name (default: gemini-2.0-flash) |
+| `OPENROUTER_API_KEY` | ❌ | OpenRouter key (AI features unavailable without it) |
+| `AI_MODEL` | ❌ | OpenRouter model id, "provider/model" (default: `openrouter/free`) |
+| `ADMIN_EMAIL` | ❌ | Owner email, promoted to admin on Google sign-in |
+| `NEXT_PUBLIC_SENTRY_DSN` | ❌ | Sentry DSN for the browser (also the only DSN `/sentry-tunnel` forwards to) |
+| `DB_CHECK_SECRET` | ❌ | Shared secret for `GET /api/db-check` |
 | `NEXT_PUBLIC_SENTRY_DSN` | ❌ | Sentry DSN for client-side error tracking |
 | `SENTRY_DSN` | ❌ | Sentry DSN for server-side error tracking |
 | `SENTRY_ORG` | ❌ | Sentry org slug (source maps) |
@@ -234,7 +240,7 @@ node .next/standalone/server.js
    ```
 3. Run seeder:
    ```bash
-   bun run scripts/seed-content.ts
+   npx tsx scripts/seed-content.ts
    ```
 4. Or use the Studio Import Center at `/studio/import`
 
@@ -254,17 +260,14 @@ npx vitest run src/lib/engine/gamification.test.ts
 
 ### Test Coverage
 
-Currently: **71 tests** across the gamification engine:
-- `xpForCorrect` — 5 tests
-- `xpForExamSession` — 3 tests
-- `levelForXp` / `xpForLevel` / `levelProgress` — 12 tests
-- `computeMastery` / `masteryLabel` — 11 tests
-- `todayKey` / `dayKeyOffset` — 6 tests
-- `updateStreak` — 8 tests
-- `getCrossedXpMilestones` — 7 tests
-- `getCrossedStreakMilestone` — 7 tests
-- `weeklyChallengeForDate` — 5 tests
-- `weekStartKey` / `weekEndKey` — 9 tests
-- `questForDate` — 4 tests
-- `shuffle` — 7 tests
-- `pickAdaptiveOrder` — 6 tests
+| File | Covers |
+|---|---|
+| `src/lib/engine/gamification.test.ts` | XP, levels, mastery, Riyadh day/week keys, streaks & shields, milestones, quests, adaptive order |
+| `src/server/actions/progress.test.ts` | Server-side grading, XP once per question per day, exam finalize (final answers, bonus cap, idempotency) |
+| `src/lib/studio-auth.test.ts` | Role guards (student / reviewer / editor / admin) |
+| `src/server/ai/evaluator.test.ts` | OpenRouter key and model selection |
+| `src/server/ingestion/ingestion.test.ts`, `src/server/ai/scoring.test.ts`, `src/lib/auth.test.ts`, `src/server/actions/actions.test.ts` | Ingestion schemas, heuristic scoring, permission matrix, DTOs |
+| `*.db.test.ts` (opt-in) | Against real Postgres: rate limiter, achievements, leaderboard, question pool |
+
+The `*.db.test.ts` files are skipped unless `TEST_DATABASE_URL` is set
+(point it, and `DATABASE_URL`, at a disposable database with migrations applied).

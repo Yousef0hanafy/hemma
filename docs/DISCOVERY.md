@@ -3,6 +3,30 @@
 > تاريخ: 2026-10-18 · الحالة: مرجع لخطة الإصلاح. كل بند معاه مسار الملف.
 > ✔ = اتأكدت منه يدويًا من الكود. الباقي من فحص الـ agents ومحتاج تأكيد وقت التنفيذ.
 
+## ✅ حالة التنفيذ (آخر تحديث: 2026-10-19)
+
+كل الدفعات من 0 لـ 7 اتنفذت على فرع `ccr-0e4bb614-0hnhe3`:
+lint بـ 0 errors، typecheck نظيف، ~140 test (منهم 8 على Postgres حقيقي بيشتغلوا بـ `TEST_DATABASE_URL`).
+
+| البند | الحالة |
+|---|---|
+| C1–C5, C12 (صلاحيات، auto-admin، IDOR) | ✅ دفعة 1 |
+| C8 (تصحيح وXP على السيرفر) | ✅ دفعة 2 |
+| C6, C7, C9 (Caddyfile، sentry tunnel، service worker) + headers + login timing | ✅ دفعة 3 |
+| migrations + runtime DDL + indexes + rate limit + C10, C11 | ✅ دفعة 4 |
+| رفع الملفات، timeouts الـ AI، OpenRouter، استيراد عالق، cache خطة المذاكرة | ✅ دفعة 5 |
+| achievements، shields، تسجيل الامتحان، leaderboard، الأسئلة المنشورة فقط، pool، التايمر | ✅ دفعة 6 |
+| deps، bun.lock، dead code، revocation الوهمي، milestones، الدوكس | ✅ دفعة 7 |
+
+**لسه مفتوح (مش متنفذ):**
+- تطبيق الـ migrations على Neon (خطوة لمرة واحدة — `docs/05-SETUP.md`).
+- CSP كامل بـ nonces؛ رفع ملفات أكبر من 4MB (Vercel Blob)؛ email verification للتسجيل بالإيميل.
+- حذف سؤال لسه بيمسح محاولات الطلاب عليه (بديل: أرشفة) — قرار منتج.
+- تقسيم الملفات الضخمة (>800 سطر) و ~400 lint warning (`any`، unused).
+- جدول `RevokedToken` و`Achievement` في الـ schema مش مستخدمين (حذفهم محتاج migration).
+
+> الجداول تحت هي تقرير الـ discovery الأصلي كما هو، للمرجع.
+
 ## الحالة العامة
 
 | الفحص | النتيجة |

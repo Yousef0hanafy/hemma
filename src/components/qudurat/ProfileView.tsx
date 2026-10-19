@@ -104,11 +104,11 @@ export function ProfileView() {
 
   // Use loaded profile or authenticated session fallback
   const profile: ExtendedProfile = rawProfile || {
-    userId: (session?.user as any)?.id || "user",
+    userId: session?.user?.id || "user",
     name: session?.user?.name || "طالب همة",
     email: session?.user?.email || null,
     image: session?.user?.image || null,
-    role: (session?.user as any)?.role || "student",
+    role: session?.user?.role || "student",
     createdAt: new Date().toISOString(),
     totalXp: 0,
     level: 1,

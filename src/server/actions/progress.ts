@@ -11,6 +11,8 @@ import {
   computeMastery,
   dayKeyOffset,
   dayStart,
+  getCrossedStreakMilestone,
+  getCrossedXpMilestones,
   levelForXp,
   levelProgress,
   todayKey,
@@ -65,7 +67,7 @@ async function awardXp(userId: string, xp: number) {
   const today = todayKey();
   const existing = await db.userProfile.findUnique({
     where: { userBucket: userId },
-    select: { level: true, currentStreak: true, longestStreak: true, streakShields: true, lastActiveDate: true },
+    select: { totalXp: true, level: true, currentStreak: true, longestStreak: true, streakShields: true, lastActiveDate: true },
   });
 
   const streak = updateStreak(
@@ -102,10 +104,19 @@ async function awardXp(userId: string, xp: number) {
     });
   }
 
+  const oldStreak = existing?.currentStreak ?? 0;
+  const streakMilestone = getCrossedStreakMilestone(oldStreak, streak.streak);
   return {
     newLevel,
     leveledUp: newLevel > (existing?.level ?? 1),
     shieldEarned: streak.shieldEarned,
+    xpMilestonesHit: getCrossedXpMilestones(existing?.totalXp ?? 0, profile.totalXp).map((m) => ({
+      xp: m.xp,
+      label: m.name,
+    })),
+    streakMilestoneHit: streakMilestone
+      ? { streak: streakMilestone.days, label: streakMilestone.name }
+      : undefined,
   };
 }
 
@@ -181,7 +192,8 @@ export async function recordAttempt(input: RecordAttemptInput) {
     },
   });
 
-  const { newLevel, leveledUp, shieldEarned } = await awardXp(userId, xpEarned);
+  const { newLevel, leveledUp, shieldEarned, xpMilestonesHit, streakMilestoneHit } =
+    await awardXp(userId, xpEarned);
   const unlockedAchievements = await evaluateAchievements(userId, {
     attempt: { isCorrect, timeMs: attempt.timeMs },
   });
@@ -194,8 +206,8 @@ export async function recordAttempt(input: RecordAttemptInput) {
     newLevel,
     unlockedAchievements,
     shieldEarned,
-    xpMilestonesHit: [] as Array<{ xp: number; label: string }>,
-    streakMilestoneHit: undefined as { streak: number; label: string } | undefined,
+    xpMilestonesHit,
+    streakMilestoneHit,
   };
 }
 

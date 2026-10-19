@@ -14,7 +14,7 @@ Unlike traditional LMS platforms, Hema combines:
 
 - **Interactive study modes** with instant feedback
 - **Spaced repetition** for long-term retention
-- **AI-powered recommendations** via Google Gemini
+- **AI-powered recommendations** via OpenRouter
 - **Gamification** (XP, levels, streaks, achievements)
 - **A full Content Studio** for managing questions, categories, and sources
 - **Exam simulations** that mirror the real test experience
@@ -34,7 +34,7 @@ Unlike traditional LMS platforms, Hema combines:
 ## Core Philosophy
 
 1. **Speed is a feature** — Every interaction is optimized for minimal clicks
-2. **AI as a team member** — Gemini handles quality checks, difficulty estimation, explanation generation, and personalized study plans
+2. **AI as a team member** — AI (via OpenRouter) handles quality checks, difficulty estimation, explanation generation, and personalized study plans
 3. **Data-driven improvement** — Every student attempt feeds back into the system
 4. **RTL-first** — Built from the ground up for Arabic, not translated from English
 5. **Offline-resilient** — PWA with service worker caching for unreliable connections
@@ -53,7 +53,7 @@ Unlike traditional LMS platforms, Hema combines:
 | **Auth** | NextAuth v4 (Google OAuth + Email/Password) |
 | **State** | Zustand |
 | **Animations** | Framer Motion |
-| **AI** | Google Gemini 2.0 Flash |
+| **AI** | OpenRouter (free models by default) |
 | **Charts** | Recharts |
 | **Forms** | React Hook Form + Zod |
 | **Tables** | TanStack Table |

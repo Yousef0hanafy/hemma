@@ -154,7 +154,7 @@ AI-powered personalized recommendations.
 - Recommends difficulty level based on performance
 - Recommends study vs exam mode
 
-**AI plan** (when Gemini is available):
+**AI plan** (when OpenRouter is configured):
 - Generates personalized insight in Arabic
 - Creates 7-day study schedule
 - Analyzes learning style and motivation
@@ -213,7 +213,7 @@ XP-based social ranking:
 | **Weekly Challenges** | 5 challenge types, deterministic per week |
 | **Milestones** | 8 XP milestones + 6 streak milestones with celebrations |
 
-**Test file:** `src/lib/engine/gamification.test.ts` (71 tests)
+**Test file:** `src/lib/engine/gamification.test.ts` (94 tests)
 
 ---
 

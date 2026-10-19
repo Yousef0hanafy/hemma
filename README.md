@@ -1,248 +1,137 @@
-# منصة همّة التعليمية — Hema Educational Platform
+# منصة همّة التعليمية — Hemma
 
-A premium, highly scalable, Arabic Right-to-Left (RTL) Learning Management System (LMS) designed specifically for Qudurat (القدرات اللفظية) exam preparation. 
+An Arabic, right-to-left learning platform for **Qudurat verbal** (القدرات اللفظية)
+exam preparation: study and timed-exam modes, spaced-repetition revision,
+gamification, an AI study buddy, and a Content Studio for importing and
+reviewing the question bank.
 
-Built with a modern web stack emphasizing performance, seamless UI/UX, AI integrations, and rigorous security standards.
+- **Students** practise in study / exam / revision modes, earn XP, streaks and
+  achievements, and compete on leaderboards.
+- **Content staff** import sources (PDF, DOCX, TXT, JSON), let AI extract and
+  check questions, review them, and publish.
 
----
-
-## 1. Project Overview
-
-### What the Project Is
-Hema Educational Platform is an interactive testing and learning environment. It shifts the paradigm of Qudurat preparation from passive reading to active, gamified, and AI-assisted learning.
-
-### Purpose and Business Goals
-- **Purpose**: To democratize high-quality Qudurat exam preparation for Arabic-speaking students.
-- **Business Goals**: Increase student retention through gamification, reduce manual tutoring overhead via AI assistance, and provide a scalable platform that can be extended to other standardized tests (e.g., Tahsili).
-
-### Target Users
-- **Students**: High school students preparing for their Qudurat exams.
-- **Content Editors & Reviewers**: Subject matter experts who ingest, review, and organize question banks.
-- **Administrators**: Platform managers who oversee user roles, platform analytics, and overall system health.
-
-### Main Features
-- **Adaptive Learning Modes**: Study Mode (instant feedback), Exam Mode (timed simulation), and Revision Mode (spaced repetition).
-- **Gamification Engine**: Experience points (XP), levels, daily streaks, shields, and unlockable achievements.
-- **AI Study Buddy**: Context-aware Gemini-powered AI tutor that explains complex linguistic relationships without revealing direct answers.
-- **Studio Dashboard**: A secure, RBAC-protected administrative interface for managing content, AI processing pipelines, and user roles.
+Detailed docs live in [`docs/`](docs): overview, architecture, student
+features, studio, setup, AI, roadmap.
 
 ---
 
-## 2. Architecture Overview
+## Stack
 
-### Application Architecture
-Hema uses a monolithic architecture built on **Next.js (App Router)**. It leverages **React Server Components (RSC)** for data fetching and SEO, while utilizing Client Components for highly interactive gamification elements and AI chat interfaces.
+| | |
+|---|---|
+| Framework | Next.js 16 (App Router, Server Actions), React 19, TypeScript |
+| UI | Tailwind CSS 4, shadcn/ui (Radix), Framer Motion, Recharts |
+| Data | PostgreSQL on Neon, Prisma 6 with migrations (`prisma/migrations`) |
+| Auth | NextAuth v4 — Google OAuth + email/password (bcrypt), JWT sessions |
+| AI | OpenRouter (OpenAI-compatible API) — free-model router by default |
+| Client state | Zustand (navigation), a small user-scoped data cache (`lib/hooks/use-data.ts`), TanStack Query in the Studio |
+| Monitoring | Sentry (optional) |
+| Hosting | Vercel |
 
-### Folder Structure
+## Project layout
+
 ```text
 src/
-├── app/              # Next.js App Router (Public routes, API, and protected /studio)
-├── components/       # React components (grouped by feature/domain)
-├── lib/              # Core business logic, database client, auth, and utilities
-└── server/           # Server Actions (Mutations) and AI integration services
-prisma/               # Database schema and migration histories
-scripts/              # CLI tools for data seeding and maintenance
-```
-
-### Key Modules
-- **State Management**: Uses `Zustand` for global client state (e.g., active exams, themes) and `TanStack Query` for caching and synchronizing server state.
-- **Authentication**: Managed by `NextAuth.js` utilizing both Google OAuth and Email/Password credentials. JWTs are used for session management with a custom database-backed revocation strategy.
-- **Authorization**: Role-Based Access Control (RBAC) enforced at both the UI layer (React) and the data layer (Server Actions/API).
-- **Database (Prisma)**: Relational data modeling using Prisma ORM connected to Neon (Serverless Postgres), heavily optimized with cascading deletes and index clustering.
-- **AI Pipeline**: Integrated with Google's Gemini SDK. The pipeline includes the Study Buddy (student-facing) and AI Evaluators (admin-facing content quality control).
-
----
-
-## 3. Technology Stack
-
-| Technology | Purpose & Justification |
-|------------|-------------------------|
-| **Next.js 16 (App Router)** | Provides Server Components, API routes, and Server Actions in a unified React framework. |
-| **TypeScript** | Ensures end-to-end type safety, eliminating a massive class of runtime errors. |
-| **Tailwind CSS 4** | Rapid, utility-first styling with native support for RTL logical properties. |
-| **Prisma ORM** | Type-safe database queries and intuitive schema management. |
-| **Neon Postgres** | Serverless Postgres database allowing for rapid scaling and connection pooling. |
-| **NextAuth.js** | Secure, flexible authentication supporting multiple providers. |
-| **Zustand** | Lightweight, boilerplate-free global client state management. |
-| **Framer Motion** | Powers the premium micro-interactions and gamification animations. |
-| **Google Gemini API** | Drives the AI tutoring and content evaluation pipelines. |
-
----
-
-## 4. Environment Variables
-
-Create a `.env` file in the root directory. **Never commit secrets to version control.**
-
-```env
-# Database configuration
-DATABASE_URL="postgresql://user:pass@host/dbname?sslmode=require"
-
-# NextAuth configuration
-NEXTAUTH_URL="http://localhost:3000"
-NEXTAUTH_SECRET="generate-a-strong-random-secret"
-
-# OAuth Providers (Optional but recommended)
-GOOGLE_CLIENT_ID="your-google-client-id"
-GOOGLE_CLIENT_SECRET="your-google-client-secret"
-
-# AI Integration
-GEMINI_API_KEY="your-google-gemini-api-key"
-
-# Sentry (Optional for production monitoring)
-NEXT_PUBLIC_SENTRY_DSN="your-sentry-dsn"
-SENTRY_AUTH_TOKEN="your-sentry-auth-token"
+├── app/            # Routes: "/" (student SPA), /studio/*, /api/*
+├── components/     # qudurat/ (student UI), studio/ (admin UI), ui/ (shadcn)
+├── lib/            # auth, db, rate limiter, engine/ (gamification, SRS, achievements), content/
+└── server/         # actions/ (Server Actions), ai/ (OpenRouter + prompts), ingestion/
+prisma/             # schema.prisma + migrations
+scripts/            # seed-content.ts, grant-admin.mjs, post-build.js
+docs/               # project documentation
 ```
 
 ---
 
-## 5. Installation Guide
+## Getting started
 
-1. **Clone the repository:**
-   ```bash
-   git clone <repository-url>
-   cd hemma
-   ```
-2. **Install dependencies:**
-   *(The project uses `npm` or `bun`)*
-   ```bash
-   npm install
-   ```
-3. **Set up Environment Variables:**
-   ```bash
-   cp .env.example .env
-   # Edit .env with your specific credentials
-   ```
+Requirements: **Node.js ≥ 20.9** and **pnpm** (version pinned in `package.json`).
 
----
+```bash
+pnpm install
+cp .env.example .env        # fill in DATABASE_URL, NEXTAUTH_SECRET, …
+pnpm db:deploy              # apply migrations
+pnpm dev                    # http://localhost:3000
+```
 
-## 6. Local Development Guide
+| Command | |
+|---|---|
+| `pnpm dev` / `pnpm build` / `pnpm start` | Develop / production build / serve |
+| `pnpm lint` · `pnpm typecheck` · `pnpm test` | What CI runs on every PR |
+| `pnpm db:migrate --name x` | Create a migration after editing the schema |
+| `pnpm db:deploy` · `pnpm db:status` | Apply / inspect migrations |
+| `pnpm admin:grant <email> [role]` | Give a user a studio role |
 
-1. **Initialize the Database:**
-   Apply the migrations to your local or Neon Postgres database
-   (see `docs/05-SETUP.md` for the one-time step on an existing database):
-   ```bash
-   pnpm db:deploy
-   ```
-2. **Start the Development Server:**
-   ```bash
-   npm run dev
-   ```
-   The application will be available at `http://localhost:3000`.
-3. **Running Tests:**
-   ```bash
-   npm run test
-   ```
-4. **Running Production Build Locally:**
-   ```bash
-   npm run build
-   npm run start
-   ```
+Environment variables are documented in [`.env.example`](.env.example). The
+important ones: `DATABASE_URL`, `NEXTAUTH_SECRET`, `NEXTAUTH_URL`,
+`GOOGLE_CLIENT_ID`/`SECRET`, `OPENROUTER_API_KEY`, `ADMIN_EMAIL`.
+
+### First admin
+
+Set `ADMIN_EMAIL` to the owner's Google address — that account becomes admin
+when it signs in **with Google** (Google verifies the email; email/password
+signups can't claim it). Other staff: `pnpm admin:grant name@example.com editor`.
 
 ---
 
-## 7. Deployment Guide
+## Roles
 
-The application is optimized for deployment on Vercel or any standard Node.js Docker environment.
+| Role | Access |
+|---|---|
+| `student` | The learning app only |
+| `reviewer` | Studio: view content, review queue (approve / reject) |
+| `editor` | + edit questions, import, sources, categories, AI jobs |
+| `admin` | + users and settings |
 
-### Production Checklist
-1. **Environment Variables**: Ensure all production secrets are securely added to your deployment platform.
-2. **Database Migrations**: Run `npx prisma migrate deploy` during the CI/CD build phase.
-3. **First Admin Setup**:
-   - Register a new account via the standard user interface.
-   - Connect to your production database using Prisma Studio (`npx prisma studio`).
-   - Manually edit your `User` record, changing the `role` from `student` to `admin`.
-4. **Studio Access**: Navigate to `https://your-domain.com/studio` to verify administrative access.
+Guards live in `src/lib/studio-auth.ts` (`requireStudioAccess`,
+`requireEditorAccess`, `requireAdminAccess`) and the permission matrix in
+`src/lib/auth.ts` (`requirePermission`). Every Server Action checks its own
+access — the Studio layout redirect is only a convenience.
 
----
+## Security notes
 
-## 8. Studio Documentation
+- **Grading is server-side**: answers are graded against the stored key and
+  XP is computed on the server; running exams don't receive answer keys.
+- **Sessions** are JWTs; each request re-reads the user's role from the
+  database, so demotions and deletions apply immediately.
+- **Rate limits** (login, signup, AI chat) are stored in Postgres so they hold
+  across serverless instances (`src/lib/rate-limiter.ts`).
+- Security headers are set in `next.config.ts`; the service worker never
+  caches Server Actions, `/api/*` or `/studio`.
 
-The **Studio** (`/studio`) is the administrative heart of the platform.
+## AI
 
-### Modules
-- **Content Library**: Manage questions, categories, and sources.
-- **AI Processing**: Batch process raw text into structured Qudurat questions using AI evaluators.
-- **User Management**: Promote users, view analytics, and manage access.
+All AI features go through **OpenRouter** (`src/server/ai/evaluator.ts`):
+the student study buddy, the studio assistant, quality checks, difficulty and
+explanation generation, document ingestion, and the personal study plan.
+Each call tries at most 4 models with timeouts. Without `OPENROUTER_API_KEY`
+the app still works; AI features fall back to heuristics or are hidden.
+See [`docs/06-AI.md`](docs/06-AI.md).
 
-### User Roles & Permissions
-- **Admin**: Full read/write/delete access to all resources. Can manage other users.
-- **Editor**: Can create, update, and manage question content and AI pipelines. Cannot manage users.
-- **Reviewer**: Can read content and approve/reject AI-generated questions. Cannot destructively modify core data.
-- **Student**: Strict read-only access to exam content. Cannot access the Studio.
+## Deployment (Vercel)
 
----
+1. Set the environment variables in the Vercel project.
+2. Apply migrations to Neon: `DATABASE_URL=<neon url> pnpm db:deploy`.
+   For the existing production database there's a **one-time** baseline
+   step — see [`docs/05-SETUP.md`](docs/05-SETUP.md#one-time-moving-an-existing-db-push-database-to-migrations).
+3. Keep **Fluid compute** enabled (default) so long imports can run up to 300 s.
 
-## 9. AI Documentation
+Uploads go through a Server Action, so files are limited to **4 MB**
+(Vercel's request-body limit).
 
-The platform heavily utilizes the **Google Gemini API**.
+## Testing
 
-### Study Buddy
-An interactive chat interface available during Study Mode. 
-- **Prompt Engineering**: The AI is strictly instructed *never* to give the direct answer. It uses the Socratic method to guide the student based on linguistic relationships (e.g., synonymy, antonymy).
-- **Integration**: Uses `GoogleGenerativeAI` initialized on the server. Chat history is strictly validated to ensure strict `user` -> `model` alternation to prevent API `400 Bad Request` errors.
+Vitest, tests next to the code (`*.test.ts`). Files named `*.db.test.ts` run
+against a real Postgres and are skipped unless `TEST_DATABASE_URL` is set:
 
-### Content Evaluator
-Used in the Studio to grade user-submitted questions or AI-generated content for linguistic accuracy and curriculum alignment.
+```bash
+TEST_DATABASE_URL=postgres://… DATABASE_URL=$TEST_DATABASE_URL pnpm test
+```
 
----
+## Known limitations
 
-## 10. Database Documentation
-
-Powered by Prisma and Postgres.
-
-### Core Models
-- **User**: Authentication credentials, roles, and profiles.
-- **Question**: Core content model containing the prompt, options, correct answer, and explanation.
-- **Category & Source**: Taxonomies for organizing questions.
-- **Attempt**: Tracks user answers for analytics and spaced repetition algorithms.
-
-### Indexing & Performance
-- Foreign keys (`categoryId`, `sourceId`, `userId`) are explicitly indexed to prevent full-table scans during dashboard analytics queries.
-- `ON DELETE CASCADE` is utilized heavily to maintain referential integrity without orphan records.
-
----
-
-## 11. Security Documentation
-
-Security is integrated at every layer:
-- **Authentication**: JWT-based session tokens with a custom, database-backed token revocation list (`RevokedToken`) to allow immediate session termination.
-- **Authorization (RBAC)**: Enforced via the `requirePermission` and `requireRole` utilities in `src/lib/auth.ts`.
-- **Server Actions**: Every Next.js Server Action explicitly validates the user's session and permissions before executing database mutations.
-- **Input Sanitization**: All rich text and markdown inputs are aggressively sanitized on the server before being persisted to the database to prevent Stored XSS.
-
----
-
-## 12. Performance Notes
-
-During the final production hardening phase, the following optimizations were implemented:
-- **Query Deduplication**: Next.js `cache()` and React `useMemo`/`useCallback` applied to heavy data grids in the Studio.
-- **Bundle Optimization**: Heavy dependencies are dynamically imported (e.g., `next/dynamic` for heavy chart libraries).
-- **Database Efficiency**: N+1 query problems in the Study Player were resolved by leveraging Prisma's `include` appropriately.
-
----
-
-## 13. Testing
-
-The repository relies on `Vitest` for fast, reliable unit and integration testing.
-
-- **Structure**: Tests are co-located with their respective modules (e.g., `actions.test.ts` next to `actions.ts`).
-- **Execution**: Run `npm run test` or `npx vitest run`.
-- **Coverage**: Core business logic, gamification engines (XP, levels), and server action permission boundaries are heavily tested. UI components rely on manual QA and static typing.
-
----
-
-## 14. Known Limitations
-
-- **AI Latency**: The Study Buddy relies on external Gemini API calls. High latency from Google's servers can occasionally cause the chat to feel unresponsive. 
-- **Real-time Sync**: The platform currently uses polling/mutation invalidation for state updates. True real-time WebSockets are not implemented due to serverless constraints.
-- **Content Ingestion**: The AI bulk-import pipeline can occasionally fail if the raw text format deviates drastically from standard Arabic linguistic patterns.
-
----
-
-## 15. Future Improvements
-
-**Prioritized Roadmap:**
-1. **Redis Caching Layer**: Implement Upstash Redis for high-frequency reads (e.g., global leaderboards).
-2. **WebSockets (Socket.io or Pusher)**: For real-time multiplayer exam challenges.
-3. **Advanced AI Analytics**: Provide students with AI-generated weekly study plans based on their `Attempt` history.
-4. **Expanded Content**: Native support for Tahsili and English language proficiency exams.
+- Free OpenRouter models can be slow or rate-limited; AI features degrade
+  gracefully but may be unavailable at times.
+- Very long documents are imported in one AI pass (first 35k characters);
+  split larger sources.
+- Offline mode serves the cached app shell only, not data.

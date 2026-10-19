@@ -59,8 +59,8 @@ Full question detail view with inline editing.
 | **Status Management** | Draft → Review → Approved → Published → Archived |
 | **Preview Mode** | See the question as a student would |
 | **Keyboard Shortcuts** | j/k = prev/next, e = edit, s = save, Esc = cancel |
-| **AI Explanation** | Auto-generate explanation with Gemini |
-| **AI Difficulty** | Estimate difficulty with Gemini |
+| **AI Explanation** | Auto-generate explanation with AI (OpenRouter) |
+| **AI Difficulty** | Estimate difficulty with AI (OpenRouter) |
 | **Navigation** | Quick prev/next between questions |
 
 **File:** `src/components/studio/StudioQuestionEditor.tsx`
@@ -183,7 +183,7 @@ AI Q&A Assistant for content managers.
 | Feature | Details |
 |---------|---------|
 | **Chat Interface** | Conversational AI about content quality |
-| **Gemini Streaming** | Token-by-token streaming responses |
+| **Streaming responses** | Token-by-token streaming responses |
 | **Session Management** | Multiple chat sessions, persisted to DB |
 | **Title Editing** | Rename chat sessions |
 | **Delete Sessions** | Clean up old conversations |
@@ -219,7 +219,7 @@ System configuration.
 | **Auto Quality Check on Import** | On/Off |
 | **Auto Difficulty Estimation** | On/Off |
 | **Auto Explanation Generation** | On/Off |
-| **AI Model** | Gemini model selection |
+| **AI Model** | AI on/off (model is set by the AI_MODEL env var) |
 | **Reset All Settings** | Restore defaults |
 
 **File:** `src/components/studio/StudioSettingsClient.tsx`

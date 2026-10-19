@@ -2,13 +2,6 @@
 
 import { db } from "@/lib/db";
 import { requireStudioAccess } from "@/lib/studio-auth";
-import {
-  getGeminiClient,
-  getAIModelName,
-  isAIAvailable,
-} from "@/server/ai/evaluator";
-import { buildSystemPrompt } from "@/server/ai/studio-chat-prompt";
-
 
 // ---------------------------------------------------------------------------
 // Chat history type
@@ -17,92 +10,6 @@ import { buildSystemPrompt } from "@/server/ai/studio-chat-prompt";
 export interface ChatMessage {
   role: "user" | "assistant";
   content: string;
-}
-
-// ---------------------------------------------------------------------------
-// Send a chat message to Gemini
-// ---------------------------------------------------------------------------
-
-export async function sendChatMessage(
-  history: ChatMessage[],
-  message: string
-): Promise<{ ok: true; response: string } | { ok: false; error: string }> {
-  await requireStudioAccess();
-
-  const client = getGeminiClient();
-  if (!client) {
-    return { ok: false, error: "لم يتم إعداد مفتاح OpenRouter / AI. تأكد من ضبط OPENROUTER_API_KEY في المتغيرات البيئية." };
-  }
-
-  if (!message.trim()) {
-    return { ok: false, error: "الرجاء كتابة رسالة" };
-  }
-
-  const modelName = getAIModelName();
-
-  try {
-    const systemPrompt = await buildSystemPrompt();
-
-    const geminiModel = client.getGenerativeModel({
-      model: modelName,
-      systemInstruction: systemPrompt,
-      generationConfig: {
-        temperature: 0.7,
-        maxOutputTokens: 2048,
-      },
-    });
-
-    // Build conversation history for Gemini
-    const contents: Array<{ role: "user" | "model"; parts: Array<{ text: string }> }> = [];
-
-    // Process history: ensure roles alternate strictly and first is user
-    const filteredHistory: Array<{ role: "user" | "model"; content: string }> = [];
-    let lastRole = "";
-    
-    // Reverse iterate to keep most recent, but keep valid chain
-    for (const msg of [...history.slice(-10)].reverse()) {
-      const msgRole = msg.role === "user" ? "user" : "model";
-      if (msgRole !== lastRole) {
-        filteredHistory.unshift({ role: msgRole, content: msg.content });
-        lastRole = msgRole;
-      }
-    }
-    
-    // Ensure the very first item is a user message
-    if (filteredHistory.length > 0 && filteredHistory[0].role !== "user") {
-      filteredHistory.shift();
-    }
-
-    for (const msg of filteredHistory) {
-      contents.push({
-        role: msg.role,
-        parts: [{ text: msg.content }],
-      });
-    }
-
-    // Ensure we don't add another user message if the last was a user
-    if (contents.length > 0 && contents[contents.length - 1].role === "user") {
-      contents[contents.length - 1].parts.push({ text: message });
-    } else {
-      contents.push({
-        role: "user",
-        parts: [{ text: message }],
-      });
-    }
-
-    const result = await geminiModel.generateContent({ contents });
-    const response = result.response;
-    const text = response.text();
-
-    if (!text) {
-      return { ok: false, error: "لم يتم الحصول على رد من Gemini" };
-    }
-
-    return { ok: true, response: text };
-  } catch (e) {
-    console.error("[Chat] Gemini error:", (e as Error).message);
-    return { ok: false, error: `خطأ في الاتصال بـ Gemini: ${(e as Error).message}` };
-  }
 }
 
 // ---------------------------------------------------------------------------
@@ -227,34 +134,4 @@ export async function updateChatSessionTitle(
     where: { id: sessionId },
     data: { title },
   });
-}
-
-// ---------------------------------------------------------------------------
-// Suggestion chips for the chat UI
-// ---------------------------------------------------------------------------
-
-export interface Suggestion {
-  label: string;
-  prompt: string;
-}
-
-export async function getSuggestions(): Promise<Suggestion[]> {
-  return [
-    {
-      label: "تحليل حالة الأسئلة",
-      prompt: "حلل توزيع الأسئلة في المنصة وما الذي يمكن تحسينه؟",
-    },
-    {
-      label: "كيف أحسن الشرح؟",
-      prompt: "قدم نصائح لكتابة شروحات تعليمية أفضل للأسئلة",
-    },
-    {
-      label: "معايير الجودة",
-      prompt: "ما هي معايير جودة الأسئلة التعليمية التي يجب أن نتبعها؟",
-    },
-    {
-      label: "تحليل سؤال",
-      prompt: "أريد تحليل سؤال محدد. سأكتب نص السؤال والخيارات",
-    },
-  ];
 }
